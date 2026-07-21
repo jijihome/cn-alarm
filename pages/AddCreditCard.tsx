@@ -3,8 +3,6 @@ import { useObservable, NavigationStack, List, Section, Text, Picker, TextField,
 import { CreditCard, BANK_PRESETS } from "../lib/constants"
 import { createCard, updateCard, syncCardAlarms, getCardById, deleteCard } from "../lib/credit-card"
 
-declare function alert(options: { title?: string; message: string }): Promise<void>
-
 const COLOR_OPTIONS = [
   { label: "橙", value: "systemOrange" },
   { label: "蓝", value: "systemBlue" },
@@ -26,6 +24,10 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
   // 删除确认对话框状态
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
+  // toast 状态（用 useState + onChanged，跟文档示例一致）
+  const [toastMsg, setToastMsg] = useState("")
+  const [toastShown, setToastShown] = useState(false)
+
   const bankName = useObservable(existing?.bankName ?? "招商银行")
   const last4Digits = useObservable(existing?.last4Digits ?? "")
   const statementDay = useObservable(existing?.statementDay ?? 5)
@@ -36,9 +38,10 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
 
   const bankLabels = BANK_PRESETS.map((b) => b.name)
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!last4Digits.value.trim() || last4Digits.value.length !== 4) {
-      await alert({ title: "提示", message: "请输入4位卡号尾号" })
+      setToastMsg("请输入4位卡号尾号")
+      setToastShown(true)
       return
     }
 
@@ -57,20 +60,19 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
     }
 
     if (editId && existing) {
-      await syncCardAlarms({ ...existing, ...cardData } as CreditCard)
       updateCard(editId, cardData)
     } else {
-      await createCard(cardData)
+      createCard(cardData)
     }
     dismiss({ saved: true })
   }
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!editId) return
     // 先关闭确认框，再执行删除
     setShowDeleteConfirm(false)
-    await deleteCard(editId)
-    dismiss({ saved: true })
+    deleteCard(editId)
+    dismiss({ deleted: true })
   }
 
   return (
@@ -94,6 +96,11 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
               <Button title="取消" role="cancel" action={() => setShowDeleteConfirm(false)} />
             </>
           ),
+        }}
+        toast={{
+          message: toastMsg,
+          isPresented: toastShown,
+          onChanged: setToastShown,
         }}
       >
         <Section header={<Text>银行信息</Text>}>

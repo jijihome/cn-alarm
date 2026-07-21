@@ -1,7 +1,7 @@
 // GroupManager.tsx - 分类管理页（增删改，快捷指令风格图标/颜色选择）
-import { useState, useObservable, NavigationStack, List, Section, Text, Button, HStack, Spacer, TextField, Navigation, EditButton, ForEach, ContentUnavailableView, Image, Circle, LazyVGrid, VStack, ZStack, RoundedRectangle } from "scripting"
+import { useState, useObservable, NavigationStack, List, Section, Text, Button, HStack, Spacer, TextField, Navigation, EditButton, ForEach, ContentUnavailableView, Image, Circle, LazyVGrid, VStack, ZStack, RoundedRectangle, useEffect } from "scripting"
 import { AlarmGroup } from "../lib/constants"
-import { loadGroups, addGroup, updateGroup, removeGroup, createGroup } from "../lib/alarm-store"
+import { loadGroups, saveGroups, addGroup, updateGroup, removeGroup, createGroup } from "../lib/alarm-store"
 import { COLOR_OPTIONS, ICON_CATEGORIES, ALL_ICONS } from "../lib/icon-data"
 
 declare function alert(options: { title?: string; message: string }): Promise<void>
@@ -179,63 +179,46 @@ function GroupEditor({ editId }: { editId?: string }) {
 
 export function GroupManager() {
   const groups = useObservable<AlarmGroup[]>(() => loadGroups())
-  const [refreshKey, setRefreshKey] = useState(0)
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
 
-  const refresh = () => {
-    groups.setValue(loadGroups())
-    setRefreshKey((k) => k + 1)
-  }
+  // 同步 groups Observable → Storage（swipe 删除后自动触发）
+  const prevGroupIdsRef = useObservable<string[]>(() => groups.value.map(g => g.id))
+  useEffect(() => {
+    const currentIds = new Set(groups.value.map(g => g.id))
+    const prevIds = prevGroupIdsRef.value
+    const deletedIds = prevIds.filter(id => !currentIds.has(id))
+    if (deletedIds.length > 0) {
+      // 同步到 storage（removeGroup 会处理关联闹钟的 groupName 清理）
+      for (const delId of deletedIds) {
+        removeGroup(delId)
+      }
+      // 保存当前 Observable 状态（已删除后的）
+      saveGroups(groups.value)
+    }
+    prevGroupIdsRef.setValue(groups.value.map(g => g.id))
+  }, [groups.value])
 
   const presentEditor = async (editId?: string) => {
     await Navigation.present({
       element: <GroupEditor editId={editId} />,
       modalPresentationStyle: "fullScreen",
     })
-    refresh()
+    groups.setValue(loadGroups())
   }
 
   const handleAdd = () => presentEditor()
   const handleEdit = (id: string) => presentEditor(id)
 
-  const confirmDelete = () => {
-    const id = deleteTargetId
-    setDeleteTargetId(null)
-    if (!id) return
-    removeGroup(id)
-    refresh()
-  }
-
-  const sorted = [...groups.value].sort((a, b) => a.order - b.order)
-  const deleteTarget = deleteTargetId ? groups.value.find((g) => g.id === deleteTargetId) : null
-
   return (
     <NavigationStack>
       <List
         navigationTitle="分类管理"
-        key={refreshKey}
         listStyle="insetGroup"
         toolbar={{
           topBarLeading: <EditButton />,
           topBarTrailing: <Button title="添加" systemImage="plus" action={handleAdd} />,
         }}
-        confirmationDialog={{
-          title: "删除分类",
-          titleVisibility: "visible",
-          message: deleteTarget ? (
-            <Text>确定删除「{deleteTarget.name}」吗？该分类下的闹钟不会删除，会归入「未分组」</Text>
-          ) : <Text>确定删除吗？</Text>,
-          isPresented: deleteTargetId !== null,
-          onChanged: (v) => { if (!v) setDeleteTargetId(null) },
-          actions: (
-            <>
-              <Button title="删除" role="destructive" action={confirmDelete} />
-              <Button title="取消" role="cancel" action={() => setDeleteTargetId(null)} />
-            </>
-          ),
-        }}
       >
-        {sorted.length === 0 ? (
+        {groups.value.length === 0 ? (
           <Section>
             <ContentUnavailableView
               title="还没有分类"
@@ -244,31 +227,23 @@ export function GroupManager() {
             />
           </Section>
         ) : (
-          <Section header={<Text>全部分类 ({sorted.length})</Text>}>
+          <Section header={<Text>全部分类 ({groups.value.length})</Text>}>
             <ForEach
-              count={sorted.length}
-              itemBuilder={(index) => {
-                const g = sorted[index]
-                return (
-                  <Button
-                    key={g.id}
-                    action={() => handleEdit(g.id)}
-                  >
-                    <HStack alignment="center" spacing={10}>
-                      <Image systemName={g.icon} foregroundStyle={g.tintColor as any} frame={{ width: 20, height: 20 }} />
-                      <Text font={16}>{g.name}</Text>
-                      <Spacer />
-                      <Circle fill={g.tintColor as any} frame={{ width: 8, height: 8 }} />
-                    </HStack>
-                  </Button>
-                )
-              }}
-              onDelete={(indices) => {
-                const target = indices[0]
-                if (target !== undefined && sorted[target]) {
-                  setDeleteTargetId(sorted[target].id)
-                }
-              }}
+              data={groups}
+              editActions="delete"
+              builder={(g: AlarmGroup) => (
+                <Button
+                  key={g.id}
+                  action={() => handleEdit(g.id)}
+                >
+                  <HStack alignment="center" spacing={10}>
+                    <Image systemName={g.icon} foregroundStyle={g.tintColor as any} frame={{ width: 20, height: 20 }} />
+                    <Text font={16}>{g.name}</Text>
+                    <Spacer />
+                    <Circle fill={g.tintColor as any} frame={{ width: 8, height: 8 }} />
+                  </HStack>
+                </Button>
+              )}
             />
           </Section>
         )}

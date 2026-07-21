@@ -1,7 +1,6 @@
 // AddAlarm.tsx - 添加/编辑闹钟页
-import { useObservable, NavigationStack, List, Section, Text, DatePicker, Toggle, Picker, TextField, Button, Navigation, HStack, Spacer } from "scripting"
+import { useObservable, useState, NavigationStack, List, Section, Text, DatePicker, Toggle, Picker, TextField, Button, Navigation, HStack, Spacer } from "scripting"
 
-declare function alert(options: { title?: string; message: string }): Promise<void>
 import { AlarmItem, RepeatRule } from "../lib/constants"
 import { createAlarmItem, addAlarm, updateAlarm, getAlarmById, loadGroups } from "../lib/alarm-store"
 import { scheduleAlarm, cancelAlarm } from "../lib/alarm-bridge"
@@ -39,6 +38,10 @@ export function AddAlarm({ editId }: AddAlarmProps) {
   const existing = editId ? getAlarmById(editId) : null
   const groups = loadGroups()
 
+  // toast 状态（用 useState + onChanged，跟文档示例一致）
+  const [toastMsg, setToastMsg] = useState("")
+  const [toastShown, setToastShown] = useState(false)
+
   const title = useObservable(existing?.title ?? "新闹钟")
   const groupName = useObservable(existing?.groupName ?? "")
   const tag = useObservable(existing?.tag ?? "")
@@ -60,9 +63,10 @@ export function AddAlarm({ editId }: AddAlarmProps) {
     : 0
   const preAlertIdx = useObservable(initialPreAlertIdx >= 0 ? initialPreAlertIdx : 0)
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!title.value.trim()) {
-      await alert({ title: "提示", message: "请输入闹钟标题" })
+      setToastMsg("请输入闹钟标题")
+      setToastShown(true)
       return
     }
 
@@ -80,19 +84,10 @@ export function AddAlarm({ editId }: AddAlarmProps) {
     }
 
     if (editId && existing) {
-      for (const aid of existing.alarmIds) await cancelAlarm(aid)
-      const updated = updateAlarm(editId, { ...alarmData, alarmIds: [], enabled: false })
-      if (existing.enabled && updated) {
-        const newAlarmId = await scheduleAlarm(updated)
-        if (newAlarmId) updateAlarm(editId, { enabled: true, alarmIds: [newAlarmId] })
-      }
+      updateAlarm(editId, { ...alarmData })
     } else {
       const alarm = createAlarmItem(alarmData)
       addAlarm(alarm)
-      if (alarm.enabled) {
-        const newAlarmId = await scheduleAlarm(alarm)
-        if (newAlarmId) updateAlarm(alarm.id, { alarmIds: [newAlarmId] })
-      }
     }
     dismiss({ saved: true })
   }
@@ -107,6 +102,11 @@ export function AddAlarm({ editId }: AddAlarmProps) {
         toolbar={{
           topBarLeading: <Button title="取消" action={() => dismiss({ saved: false })} />,
           topBarTrailing: <Button title="保存" action={handleSave} />,
+        }}
+        toast={{
+          message: toastMsg,
+          isPresented: toastShown,
+          onChanged: setToastShown,
         }}
       >
         <Section header={<Text>时间</Text>}>

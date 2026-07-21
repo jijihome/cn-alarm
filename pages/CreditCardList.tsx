@@ -35,16 +35,25 @@ function CardRow({ card, onEdit, onToggle }: { card: CreditCard; onEdit: (id: st
 
 export function CreditCardList() {
   const cards = useObservable<CreditCard[]>(() => loadCards())
-  const [refreshKey, setRefreshKey] = useState(0)
+  // toast 状态
+  const [toastMsg, setToastMsg] = useState("")
+  const [toastShown, setToastShown] = useState(false)
 
   // 弹出添加/编辑信用卡模态页，关闭后刷新
-  const presentEditor = async (editId?: string) => {
-    await Navigation.present({
+  const presentEditor = (editId?: string) => {
+    Navigation.present({
       element: <AddCreditCard editId={editId} />,
       modalPresentationStyle: "fullScreen",
+    }).then((result: any) => {
+      // 先设toast，再刷新数据
+      if (result?.deleted) {
+        setToastMsg("信用卡已删除")
+      } else {
+        setToastMsg(editId ? "信用卡已更新" : "信用卡已添加")
+      }
+      setToastShown(true)
+      cards.setValue(loadCards())
     })
-    cards.setValue(loadCards())
-    setRefreshKey((k) => k + 1)
   }
 
   const handleAdd = () => presentEditor()
@@ -53,16 +62,19 @@ export function CreditCardList() {
   const handleToggle = (id: string, enabled: boolean) => {
     updateCard(id, { enabled })
     cards.setValue(loadCards())
-    setRefreshKey((k) => k + 1)
   }
 
   return (
     <NavigationStack>
       <List
         navigationTitle="信用卡"
-        key={refreshKey}
         toolbar={{
           topBarTrailing: <Button title="添加" systemImage="plus" action={handleAdd} />,
+        }}
+        toast={{
+          message: toastMsg,
+          isPresented: toastShown,
+          onChanged: setToastShown,
         }}
       >
         {cards.value.length === 0 ? (

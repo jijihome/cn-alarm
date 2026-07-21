@@ -2,7 +2,6 @@
 // 图标名来源：本地 SF Symbol 7 项目（已验证存在的标准名）
 
 // ==================== 颜色 ====================
-// 15 个互不相同的颜色（hex 色值，参考 iOS 系统颜色 + 扩展）
 export interface ColorOption {
   label: string
   value: string
@@ -27,7 +26,6 @@ export const COLOR_OPTIONS: ColorOption[] = [
 ]
 
 // ==================== 图标分类 ====================
-// 只保留基础名和 .fill 变体，去掉 badge/circle/slash 等复杂变体
 export interface IconCategory {
   name: string
   icons: string[]
@@ -60,9 +58,14 @@ export const ICON_CATEGORIES: IconCategory[] = [
       "envelope", "envelope.fill",
       "creditcard", "creditcard.fill",
       "giftcard", "giftcard.fill",
+      "banknote", "banknote.fill",
       "chart.bar", "chart.bar.fill",
       "chart.pie", "chart.pie.fill",
       "percent",
+      "dollarsign", "dollarsign.square.fill",
+      "yensign", "yensign.square.fill",
+      "eurosign", "eurosign.square.fill",
+      "sterlingsign", "sterlingsign.square.fill",
       "signature",
       "paperclip",
       "clipboard", "clipboard.fill",
@@ -79,6 +82,8 @@ export const ICON_CATEGORIES: IconCategory[] = [
       "desktopcomputer",
       "externaldrive", "externaldrive.fill",
       "magnifyingglass",
+      "building", "building.fill",
+      "building.columns", "building.columns.fill",
     ],
   },
   {
@@ -95,9 +100,10 @@ export const ICON_CATEGORIES: IconCategory[] = [
       "figure.walk",
       "location", "location.fill",
       "location.north", "location.north.fill",
+      "location.square", "location.square.fill",
       "map", "map.fill",
       "mappin",
-      "globe",
+      "globe", "globe.fill",
       "fuelpump", "fuelpump.fill",
       "parkingsign",
     ],
@@ -106,6 +112,7 @@ export const ICON_CATEGORIES: IconCategory[] = [
     name: "生活",
     icons: [
       "house", "house.fill",
+      "house.lodge", "house.lodge.fill",
       "cup.and.saucer", "cup.and.saucer.fill",
       "fork.knife",
       "cart", "cart.fill",
@@ -114,6 +121,7 @@ export const ICON_CATEGORIES: IconCategory[] = [
       "wineglass", "wineglass.fill",
       "birthday.cake", "birthday.cake.fill",
       "popcorn", "popcorn.fill",
+      "theatermasks", "theatermasks.fill",
       "music.note",
       "headphones",
       "microphone", "microphone.fill",
@@ -135,6 +143,7 @@ export const ICON_CATEGORIES: IconCategory[] = [
       "bathtub", "bathtub.fill",
       "bed.double", "bed.double.fill",
       "sofa", "sofa.fill",
+      "refrigerator", "refrigerator.fill",
       "sportscourt", "sportscourt.fill",
       "figure.yoga",
       "dumbbell", "dumbbell.fill",
@@ -144,13 +153,18 @@ export const ICON_CATEGORIES: IconCategory[] = [
     name: "健康",
     icons: [
       "heart", "heart.fill",
-      "heart.text.square",
+      "heart.text.square.fill",
       "stethoscope",
-      "cross.case",
-      "cross.vial",
-      "syringe",
-      "pill",
-      "bandage",
+      "cross.case", "cross.case.fill",
+      "cross.vial", "cross.vial.fill",
+      "syringe", "syringe.fill",
+      "pill", "pill.fill",
+      "bandage", "bandage.fill",
+      "facemask", "facemask.fill",
+      "brain", "brain.fill",
+      "lungs", "lungs.fill",
+      "eye", "eye.fill",
+      "eyeglasses",
       "thermometer.medium",
       "figure.walk",
       "figure.yoga",
@@ -162,19 +176,28 @@ export const ICON_CATEGORIES: IconCategory[] = [
     name: "天气",
     icons: [
       "sun.max", "sun.max.fill",
+      "sunrise", "sunrise.fill",
+      "sunset", "sunset.fill",
       "moon", "moon.fill",
+      "moon.stars", "moon.stars.fill",
       "cloud", "cloud.fill",
       "cloud.rain", "cloud.rain.fill",
       "cloud.bolt", "cloud.bolt.fill",
+      "cloud.snow", "cloud.snow.fill",
+      "cloud.sun", "cloud.sun.fill",
+      "cloud.moon", "cloud.moon.fill",
       "snowflake",
       "thermometer.medium",
-      "umbrella",
+      "umbrella", "umbrella.fill",
       "wind",
       "sparkles",
       "flame", "flame.fill",
       "drop", "drop.fill",
       "leaf", "leaf.fill",
       "tropicalstorm",
+      "rainbow",
+      "tornado",
+      "humidity", "humidity.fill",
     ],
   },
   {
@@ -186,7 +209,11 @@ export const ICON_CATEGORIES: IconCategory[] = [
       "figure.walk",
       "figure.wave",
       "figure.yoga",
+      "figure.run",
       "graduationcap", "graduationcap.fill",
+      "hand.thumbsup", "hand.thumbsup.fill",
+      "hand.raised", "hand.raised.fill",
+      "face.smiling",
       "star", "star.fill",
       "heart", "heart.fill",
       "bookmark", "bookmark.fill",
@@ -217,6 +244,10 @@ export const ICON_CATEGORIES: IconCategory[] = [
       "xmark",
       "plus.circle.fill",
       "minus.circle.fill",
+      "asterisk",
+      "at",
+
+      "number",
     ],
   },
 ]

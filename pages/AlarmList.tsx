@@ -1,28 +1,11 @@
 // AlarmList.tsx - 闹钟列表页
-import { useState, useObservable, NavigationStack, List, Section, Text, Button, EditButton, ContentUnavailableView, VStack, Navigation, ForEach } from "scripting"
+import { useState, useObservable, NavigationStack, List, Section, Text, Button, EditButton, ContentUnavailableView, VStack, Navigation, ForEach, useEffect } from "scripting"
 import { AlarmItem } from "../lib/constants"
-import { loadAlarms, updateAlarm, removeAlarm } from "../lib/alarm-store"
+import { loadAlarms, saveAlarms, updateAlarm } from "../lib/alarm-store"
 import { getNextAlarmFromList, formatCountdown, formatRepeatDescription } from "../lib/scheduler"
 import { scheduleAlarm, cancelAlarm } from "../lib/alarm-bridge"
 import { AlarmRow } from "../components/AlarmRow"
 import { AddAlarm } from "./AddAlarm"
-
-declare function alert(options: { title?: string; message: string }): Promise<void>
-
-interface GroupedAlarms {
-  groupName: string
-  alarms: AlarmItem[]
-}
-
-function groupAlarms(alarms: AlarmItem[]): GroupedAlarms[] {
-  const groups: Record<string, AlarmItem[]> = {}
-  for (const a of alarms) {
-    const g = a.groupName || "未分组"
-    if (!groups[g]) groups[g] = []
-    groups[g].push(a)
-  }
-  return Object.entries(groups).map(([groupName, alarms]) => ({ groupName, alarms }))
-}
 
 function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
   const enabled = alarms.filter((a) => a.enabled)
@@ -57,22 +40,48 @@ function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
 
 export function AlarmList() {
   const alarms = useObservable<AlarmItem[]>(() => loadAlarms())
-  const [refreshKey, setRefreshKey] = useState(0)
-  // 删除确认对话框：待删除的 alarm id（null=不显示）
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  // toast 状态
+  const [toastMsg, setToastMsg] = useState("")
+  const [toastShown, setToastShown] = useState(false)
 
-  const refresh = () => {
-    alarms.setValue(loadAlarms())
-    setRefreshKey((k) => k + 1)
-  }
+  // 同步 alarms Observable → Storage（swipe 删除后自动触发）
+  const prevAlarmIdsRef = useObservable<string[]>(() => alarms.value.map(a => a.id))
+  useEffect(() => {
+    const currentIds = new Set(alarms.value.map(a => a.id))
+    const prevIds = prevAlarmIdsRef.value
+    // 找出被删除的 id
+    const deletedIds = prevIds.filter(id => !currentIds.has(id))
+    if (deletedIds.length > 0) {
+      // 取消被删闹钟的系统提醒（从 storage 读旧数据取 alarmIds）
+      const oldAlarms = loadAlarms()
+      for (const delId of deletedIds) {
+        const oldAlarm = oldAlarms.find(a => a.id === delId)
+        if (oldAlarm) {
+          for (const aid of oldAlarm.alarmIds) {
+            cancelAlarm(aid)
+          }
+        }
+      }
+      // 同步到 storage
+      saveAlarms(alarms.value)
+      // 显示toast
+      setToastMsg(deletedIds.length === 1 ? "闹钟已删除" : `已删除${deletedIds.length}个闹钟`)
+      setToastShown(true)
+    }
+    // 更新 prev ref
+    prevAlarmIdsRef.setValue(alarms.value.map(a => a.id))
+  }, [alarms.value])
 
   // 弹出添加/编辑闹钟模态页，关闭后刷新列表
-  const presentEditor = async (editId?: string) => {
-    await Navigation.present({
+  const presentEditor = (editId?: string) => {
+    Navigation.present({
       element: <AddAlarm editId={editId} />,
       modalPresentationStyle: "fullScreen",
+    }).then(() => {
+      alarms.setValue(loadAlarms())
+      setToastMsg(editId ? "闹钟已更新" : "闹钟已添加")
+      setToastShown(true)
     })
-    refresh()
   }
 
   const handleAdd = () => presentEditor()
@@ -87,9 +96,11 @@ export function AlarmList() {
       const alarmId = await scheduleAlarm(alarm)
       if (alarmId) {
         updateAlarm(id, { enabled: true, alarmIds: [...alarm.alarmIds, alarmId] })
+        setToastMsg("闹钟已启用")
+        setToastShown(true)
       } else {
-        // 创建失败：提示用户（可能是 iOS < 26 或 AlarmManager 不可用）
-        await alert({ title: "无法启用闹钟", message: "系统闹钟创建失败。请确认设备为 iOS 26+ 且已授权闹钟权限。" })
+        setToastMsg("系统提醒创建失败，闹钟未启用")
+        setToastShown(true)
       }
     } else {
       // 停用：取消所有系统闹钟
@@ -97,58 +108,25 @@ export function AlarmList() {
         await cancelAlarm(aid)
       }
       updateAlarm(id, { enabled: false, alarmIds: [] })
+      setToastMsg("闹钟已停用")
+      setToastShown(true)
     }
 
-    refresh()
+    alarms.setValue(loadAlarms())
   }
-
-  // 左滑删除：先弹确认框
-  const requestDelete = (id: string) => {
-    setDeleteTargetId(id)
-  }
-
-  const confirmDelete = async () => {
-    const id = deleteTargetId
-    setDeleteTargetId(null)
-    if (!id) return
-    const alarm = alarms.value.find((a) => a.id === id)
-    if (alarm) {
-      // 取消所有系统闹钟
-      for (const aid of alarm.alarmIds) {
-        await cancelAlarm(aid)
-      }
-    }
-    removeAlarm(id)
-    refresh()
-  }
-
-  const grouped = groupAlarms(alarms.value)
-  // 待删除的 alarm 对象（用于确认框显示信息）
-  const deleteTarget = deleteTargetId ? alarms.value.find((a) => a.id === deleteTargetId) : null
 
   return (
     <NavigationStack>
       <List
         navigationTitle="闹钟"
-        key={refreshKey}
         toolbar={{
           topBarLeading: <EditButton />,
           topBarTrailing: <Button title="添加" systemImage="plus" action={handleAdd} />,
         }}
-        confirmationDialog={{
-          title: "删除闹钟",
-          titleVisibility: "visible",
-          message: deleteTarget ? (
-            <Text>确定删除「{deleteTarget.title}」吗？</Text>
-          ) : <Text>确定删除吗？</Text>,
-          isPresented: deleteTargetId !== null,
-          onChanged: (v) => { if (!v) setDeleteTargetId(null) },
-          actions: (
-            <>
-              <Button title="删除" role="destructive" action={confirmDelete} />
-              <Button title="取消" role="cancel" action={() => setDeleteTargetId(null)} />
-            </>
-          ),
+        toast={{
+          message: toastMsg,
+          isPresented: toastShown,
+          onChanged: setToastShown,
         }}
       >
         <Section>
@@ -164,32 +142,18 @@ export function AlarmList() {
             />
           </Section>
         ) : (
-          grouped.map((group) => (
-            <Section key={group.groupName} header={<Text>{group.groupName}</Text>}>
-              {/* 用 deprecated ForEach 形式以支持 onDelete 左滑删除 */}
-              <ForEach
-                count={group.alarms.length}
-                itemBuilder={(index) => {
-                  const alarm = group.alarms[index]
-                  return (
-                    <AlarmRow
-                      key={alarm.id}
-                      alarm={alarm}
-                      onToggle={handleToggle}
-                      onEdit={handleEdit}
-                    />
-                  )
-                }}
-                onDelete={(indices) => {
-                  // indices 是相对当前 group 的索引
-                  const target = indices[0]
-                  if (target !== undefined && group.alarms[target]) {
-                    requestDelete(group.alarms[target].id)
-                  }
-                }}
+          <ForEach
+            data={alarms}
+            editActions="delete"
+            builder={(alarm: AlarmItem) => (
+              <AlarmRow
+                key={alarm.id}
+                alarm={alarm}
+                onToggle={handleToggle}
+                onEdit={handleEdit}
               />
-            </Section>
-          ))
+            )}
+          />
         )}
       </List>
     </NavigationStack>

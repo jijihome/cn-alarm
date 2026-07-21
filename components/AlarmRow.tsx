@@ -40,6 +40,7 @@ export function AlarmRow({ alarm, onToggle, onEdit }: AlarmRowProps) {
           </Text>
         </VStack>
         <Toggle
+          title="启用"
           value={alarm.enabled}
           onChanged={handleToggle}
         />

@@ -1,37 +1,37 @@
 {
-  "intentInputTypes" : [
-
-  ],
+  "runInApp" : true,
   "contributors" : [
 
   ],
+  "remoteResource" : null,
+  "intentInputTypes" : [
+
+  ],
   "description" : "符合中国国情的个人闹钟管理程序 - 调休联动、信用卡还款日、农历\/节气",
-  "iconImage" : "",
-  "icon" : "alarm.fill",
-  "author" : {
-    "homepage" : null,
-    "name" : "王剑辉",
-    "email" : "jijihome@gmail.com"
-  },
-  "name" : "中国闹钟",
-  "color" : "rgba(255, 159, 10, 1)",
-  "localizedDescriptions" : {
-    "de" : "",
-    "ja" : "",
-    "it" : "",
-    "ru" : "",
-    "fr" : "",
-    "pt" : "",
-    "es" : "",
-    "en" : "",
-    "zh" : ""
-  },
   "localizedNames" : {
     "zh" : "中国闹钟"
   },
-  "runInApp" : true,
+  "localizedDescriptions" : {
+    "ja" : "",
+    "zh" : "",
+    "en" : "",
+    "ru" : "",
+    "it" : "",
+    "pt" : "",
+    "fr" : "",
+    "de" : "",
+    "es" : ""
+  },
+  "author" : {
+    "email" : "jijihome@gmail.com",
+    "name" : "王剑辉",
+    "homepage" : null
+  },
+  "name" : "中国闹钟",
+  "iconImage" : "",
+  "color" : "rgba(255, 159, 10, 1)",
+  "permissions" : null,
+  "icon" : "alarm.fill",
   "entry" : "index.tsx",
-  "remoteResource" : null,
-  "version" : "1.0.0",
-  "permissions" : null
+  "version" : "1.0.0"
 }
