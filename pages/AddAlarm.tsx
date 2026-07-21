@@ -2,7 +2,7 @@
 import { useObservable, useState, NavigationStack, List, Section, Text, DatePicker, Toggle, Picker, TextField, Button, Navigation, HStack, Spacer } from "scripting"
 
 import { AlarmItem, RepeatRule } from "../lib/constants"
-import { createAlarmItem, addAlarm, updateAlarm, getAlarmById, loadGroups } from "../lib/alarm-store"
+import { createAlarmItem, addAlarm, updateAlarm, getAlarmById, loadGroups, loadSettings } from "../lib/alarm-store"
 import { scheduleAlarm, cancelAlarm } from "../lib/alarm-bridge"
 import { RepeatSettings } from "../components/repeat/RepeatSettings"
 
@@ -47,7 +47,8 @@ export function AddAlarm({ editId }: AddAlarmProps) {
   const tag = useObservable(existing?.tag ?? "")
   const note = useObservable(existing?.note ?? "")
   const tintColor = useObservable(existing?.tintColor ?? "systemBlue")
-  const gradualWake = useObservable(existing?.gradualWake ?? false)
+  const defaults = existing ? null : loadSettings()
+  const gradualWake = useObservable(existing?.gradualWake ?? defaults?.defaultGradualWake ?? false)
 
   // 时间
   const initialDate = new Date()
@@ -60,7 +61,7 @@ export function AddAlarm({ editId }: AddAlarmProps) {
   // 提前提醒
   const initialPreAlertIdx = existing
     ? PRESET_PRE_ALERTS.indexOf(existing.preAlertSeconds)
-    : 0
+    : PRESET_PRE_ALERTS.indexOf(defaults?.defaultPreAlert ?? 300)
   const preAlertIdx = useObservable(initialPreAlertIdx >= 0 ? initialPreAlertIdx : 0)
 
   const handleSave = () => {
@@ -123,7 +124,7 @@ export function AddAlarm({ editId }: AddAlarmProps) {
           rule={repeatRule}
         />
 
-        <Section header={<Text>提醒方式</Text>}>
+        <Section header={<Text>提醒方式</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">开启后，在正式响铃前先发一次轻提醒，逐步唤醒，避免被突然的大音量吓醒</Text>}>
           <Toggle title="渐进唤醒" value={gradualWake} />
           {gradualWake.value && (
             <Picker

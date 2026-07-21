@@ -4,8 +4,6 @@ import { AlarmGroup } from "../lib/constants"
 import { loadGroups, saveGroups, addGroup, updateGroup, removeGroup, createGroup } from "../lib/alarm-store"
 import { COLOR_OPTIONS, ICON_CATEGORIES, ALL_ICONS } from "../lib/icon-data"
 
-declare function alert(options: { title?: string; message: string }): Promise<void>
-
 // 网格列定义：5 列自适应
 const GRID_COLUMNS = [
   { size: { type: "adaptive" as const, min: 50, max: 60 } },
@@ -54,9 +52,14 @@ function GroupEditor({ editId }: { editId?: string }) {
   const colorValue = useObservable(existing?.tintColor ?? "#007AFF")
   const [searchText, setSearchText] = useState("")
 
+  // toast 状态
+  const [toastMsg, setToastMsg] = useState("")
+  const [toastShown, setToastShown] = useState(false)
+
   const handleSave = () => {
     if (!name.value.trim()) {
-      alert({ title: "提示", message: "请输入分类名称" })
+      setToastMsg("请输入分类名称")
+      setToastShown(true)
       return
     }
     const data: Partial<AlarmGroup> = {
@@ -88,6 +91,11 @@ function GroupEditor({ editId }: { editId?: string }) {
         toolbar={{
           topBarLeading: <Button title="取消" action={() => dismiss({ saved: false })} />,
           topBarTrailing: <Button title="保存" action={handleSave} />,
+        }}
+        toast={{
+          message: toastMsg,
+          isPresented: toastShown,
+          onChanged: setToastShown,
         }}
       >
         {/* 图标预览 */}
@@ -180,6 +188,10 @@ function GroupEditor({ editId }: { editId?: string }) {
 export function GroupManager() {
   const groups = useObservable<AlarmGroup[]>(() => loadGroups())
 
+  // toast 状态
+  const [toastMsg, setToastMsg] = useState("")
+  const [toastShown, setToastShown] = useState(false)
+
   // 同步 groups Observable → Storage（swipe 删除后自动触发）
   const prevGroupIdsRef = useObservable<string[]>(() => groups.value.map(g => g.id))
   useEffect(() => {
@@ -193,16 +205,24 @@ export function GroupManager() {
       }
       // 保存当前 Observable 状态（已删除后的）
       saveGroups(groups.value)
+      // 显示toast
+      setToastMsg(deletedIds.length === 1 ? "分类已删除" : `已删除${deletedIds.length}个分类`)
+      setToastShown(true)
     }
     prevGroupIdsRef.setValue(groups.value.map(g => g.id))
   }, [groups.value])
 
-  const presentEditor = async (editId?: string) => {
-    await Navigation.present({
+  const presentEditor = (editId?: string) => {
+    Navigation.present({
       element: <GroupEditor editId={editId} />,
       modalPresentationStyle: "fullScreen",
+    }).then((result: any) => {
+      if (result?.saved) {
+        setToastMsg(editId ? "分类已更新" : "分类已添加")
+        setToastShown(true)
+      }
+      groups.setValue(loadGroups())
     })
-    groups.setValue(loadGroups())
   }
 
   const handleAdd = () => presentEditor()
@@ -216,6 +236,11 @@ export function GroupManager() {
         toolbar={{
           topBarLeading: <EditButton />,
           topBarTrailing: <Button title="添加" systemImage="plus" action={handleAdd} />,
+        }}
+        toast={{
+          message: toastMsg,
+          isPresented: toastShown,
+          onChanged: setToastShown,
         }}
       >
         {groups.value.length === 0 ? (

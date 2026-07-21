@@ -45,13 +45,13 @@ export function CreditCardList() {
       element: <AddCreditCard editId={editId} />,
       modalPresentationStyle: "fullScreen",
     }).then((result: any) => {
-      // 先设toast，再刷新数据
       if (result?.deleted) {
         setToastMsg("信用卡已删除")
-      } else {
+        setToastShown(true)
+      } else if (result?.saved) {
         setToastMsg(editId ? "信用卡已更新" : "信用卡已添加")
+        setToastShown(true)
       }
-      setToastShown(true)
       cards.setValue(loadCards())
     })
   }
@@ -61,6 +61,8 @@ export function CreditCardList() {
 
   const handleToggle = (id: string, enabled: boolean) => {
     updateCard(id, { enabled })
+    setToastMsg(enabled ? "信用卡已启用" : "信用卡已停用")
+    setToastShown(true)
     cards.setValue(loadCards())
   }
 

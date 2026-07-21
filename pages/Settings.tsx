@@ -52,7 +52,7 @@ export function Settings() {
         </Section>
 
         {/* 默认设置 */}
-        <Section header={<Text>默认设置</Text>}>
+        <Section header={<Text>默认设置</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">渐进唤醒：在正式响铃前先发轻提醒，逐步唤醒，避免被突然的大音量吓醒</Text>}>
           <Toggle
             title="新闹钟默认渐进唤醒"
             value={settings.value.defaultGradualWake ? true : false}

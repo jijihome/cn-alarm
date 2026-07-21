@@ -77,10 +77,13 @@ export function AlarmList() {
     Navigation.present({
       element: <AddAlarm editId={editId} />,
       modalPresentationStyle: "fullScreen",
-    }).then(() => {
+    }).then((result: any) => {
+      // 只有真正保存才显示toast
+      if (result?.saved) {
+        setToastMsg(editId ? "闹钟已更新" : "闹钟已添加")
+        setToastShown(true)
+      }
       alarms.setValue(loadAlarms())
-      setToastMsg(editId ? "闹钟已更新" : "闹钟已添加")
-      setToastShown(true)
     })
   }
 
