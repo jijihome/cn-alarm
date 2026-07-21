@@ -1,9 +1,22 @@
 // scheduler.ts - 多调度引擎核心
 import { AlarmItem, RepeatRule, AppSettings } from "./constants"
+import { HolidayAction } from "./constants"
 import { shouldRing, isHoliday, isWorkday, formatDate } from "./holiday"
 import { lunarToSolar } from "./lunar"
 import { getNextSolarTerm } from "./solar-term"
 import { loadSettings } from "./alarm-store"
+
+// ==================== 辅助：defer 顺延 ====================
+// 候选日是节假日时，逐日 +1 直到非节假日（补班日算非节假日，停）
+function deferPastHoliday(candidate: Date): Date {
+  let d = new Date(candidate)
+  // 最多顺延 30 天，防止死循环
+  for (let i = 0; i < 30; i++) {
+    if (!isHoliday(d)) return d
+    d.setDate(d.getDate() + 1)
+  }
+  return d
+}
 
 // ==================== 主入口：获取下一个触发时间 ====================
 export function getNextTrigger(alarm: AlarmItem, now: Date): Date | null {
@@ -43,21 +56,34 @@ function getNextOnce(alarm: AlarmItem, now: Date): Date | null {
 function getNextDaily(alarm: AlarmItem, now: Date): Date | null {
   const settings = loadSettings()
   const interval = alarm.repeat.interval || 1
+  const action: HolidayAction = alarm.repeat.holidayAction ?? "none"
 
-  for (let offset = 0; offset < interval * 2 + 1; offset++) {
+  for (let offset = 0; offset < interval * 2 + 30; offset++) {
     const candidate = new Date(now)
     candidate.setDate(candidate.getDate() + offset)
     candidate.setHours(alarm.hour, alarm.minute, 0, 0)
 
     if (offset === 0 && candidate <= now) continue
 
-    if (alarm.repeat.holidayAware && settings.holidayAutoSkip && isHoliday(candidate)) continue
-
     // 检查间隔
     if (interval > 1 && alarm.repeat.anchorDate) {
       const anchor = new Date(alarm.repeat.anchorDate)
       const daysDiff = Math.floor((candidate.getTime() - anchor.getTime()) / (24 * 60 * 60 * 1000))
       if (daysDiff % interval !== 0) continue
+    }
+
+    // 调休动作
+    if (action === "skip") {
+      if (settings.holidayAutoSkip && isHoliday(candidate)) continue
+      // 补班日强制响
+      if (isWorkday(candidate)) return candidate
+    } else if (action === "defer") {
+      // defer: 节假日当天顺延到下一个非节假日
+      if (isHoliday(candidate)) {
+        const deferred = deferPastHoliday(candidate)
+        deferred.setHours(alarm.hour, alarm.minute, 0, 0)
+        return deferred
+      }
     }
 
     return candidate
@@ -70,6 +96,7 @@ function getNextWeekly(alarm: AlarmItem, now: Date): Date | null {
   const settings = loadSettings()
   const weekdays = alarm.repeat.weekdays ?? []
   const interval = alarm.repeat.interval || 1
+  const action: HolidayAction = alarm.repeat.holidayAction ?? "none"
 
   for (let offset = 0; offset < 14; offset++) {
     const candidate = new Date(now)
@@ -81,8 +108,8 @@ function getNextWeekly(alarm: AlarmItem, now: Date): Date | null {
     const dayOfWeek = candidate.getDay() + 1 // Apple: 1=日 2=一 ... 7=六
     if (!weekdays.includes(dayOfWeek)) continue
 
-    // 调休联动判断
-    if (alarm.repeat.holidayAware) {
+    // 调休动作：weekly 的 skip 和 defer 都=节假日跳过不补（不顺延到非已选星期）
+    if (action === "skip" || action === "defer") {
       if (settings.holidayAutoSkip && isHoliday(candidate)) continue
     }
 
@@ -94,7 +121,7 @@ function getNextWeekly(alarm: AlarmItem, now: Date): Date | null {
     }
 
     // 补班日强制响（在 interval 检查通过后）
-    if (alarm.repeat.holidayAware && isWorkday(candidate)) return candidate
+    if (action !== "none" && isWorkday(candidate)) return candidate
 
     return candidate
   }
@@ -151,6 +178,8 @@ function getNthWorkdayOfYear(year: number, nthWorkday: number): Date | null {
 function getNextMonthly(alarm: AlarmItem, now: Date): Date | null {
   const interval = alarm.repeat.interval || 1
   const subMode = alarm.repeat.monthlySubMode ?? "day"
+  const action: HolidayAction = alarm.repeat.holidayAction ?? "none"
+  const settings = loadSettings()
 
   let year = now.getFullYear()
   let month = now.getMonth() + 1
@@ -181,6 +210,23 @@ function getNextMonthly(alarm: AlarmItem, now: Date): Date | null {
         }
       }
       candidate.setHours(alarm.hour, alarm.minute, 0, 0)
+
+      // 调休动作
+      if (action === "skip") {
+        if (settings.holidayAutoSkip && isHoliday(candidate)) {
+          month++
+          if (month > 12) { month = 1; year++ }
+          continue
+        }
+        if (isWorkday(candidate)) return candidate
+      } else if (action === "defer") {
+        if (isHoliday(candidate)) {
+          const deferred = deferPastHoliday(candidate)
+          deferred.setHours(alarm.hour, alarm.minute, 0, 0)
+          return deferred
+        }
+      }
+
       return candidate
     }
 
@@ -193,13 +239,35 @@ function getNextMonthly(alarm: AlarmItem, now: Date): Date | null {
 // ==================== yearly: 每年（含节气） ====================
 function getNextYearly(alarm: AlarmItem, now: Date): Date | null {
   const subMode = alarm.repeat.yearlySubMode ?? (alarm.repeat.solarTerm ? "solarTerm" : "date")
+  const action: HolidayAction = alarm.repeat.holidayAction ?? "none"
+  const settings = loadSettings()
+
+  // 对候选日应用调休动作，返回可能调整后的 Date（或 null 表示跳过）
+  const applyHoliday = (candidate: Date): Date | null => {
+    if (action === "none") return candidate
+    if (action === "skip") {
+      if (settings.holidayAutoSkip && isHoliday(candidate)) return null
+      if (isWorkday(candidate)) return candidate
+      return candidate
+    }
+    // defer: 节假日当天顺延到下一个非节假日
+    if (isHoliday(candidate)) {
+      const deferred = deferPastHoliday(candidate)
+      deferred.setHours(alarm.hour, alarm.minute, 0, 0)
+      return deferred
+    }
+    return candidate
+  }
 
   // 节气
   if (subMode === "solarTerm" && alarm.repeat.solarTerm) {
     const termDate = getNextSolarTerm(alarm.repeat.solarTerm, now)
     if (termDate) {
       termDate.setHours(alarm.hour, alarm.minute, 0, 0)
-      if (termDate > now) return termDate
+      if (termDate > now) {
+        const adjusted = applyHoliday(termDate)
+        if (adjusted) return adjusted
+      }
     }
     return null
   }
@@ -211,7 +279,10 @@ function getNextYearly(alarm: AlarmItem, now: Date): Date | null {
       const candidate = getNthWorkdayOfYear(year, alarm.repeat.nthWorkdayOfYear)
       if (candidate) {
         candidate.setHours(alarm.hour, alarm.minute, 0, 0)
-        if (candidate > now) return candidate
+        if (candidate > now) {
+          const adjusted = applyHoliday(candidate)
+          if (adjusted) return adjusted
+        }
       }
       year++
     }
@@ -225,7 +296,10 @@ function getNextYearly(alarm: AlarmItem, now: Date): Date | null {
       const candidate = getWeekdayOfMonth(year, alarm.repeat.monthOfYear, alarm.repeat.weekOfMonth, alarm.repeat.weekdayOfMonth)
       if (candidate) {
         candidate.setHours(alarm.hour, alarm.minute, 0, 0)
-        if (candidate > now) return candidate
+        if (candidate > now) {
+          const adjusted = applyHoliday(candidate)
+          if (adjusted) return adjusted
+        }
       }
       year++
     }
@@ -241,7 +315,10 @@ function getNextYearly(alarm: AlarmItem, now: Date): Date | null {
     const daysInMonth = new Date(year, monthOfYear, 0).getDate()
     const actualDay = Math.min(dayOfMonth, daysInMonth)
     const candidate = new Date(year, monthOfYear - 1, actualDay, alarm.hour, alarm.minute, 0, 0)
-    if (candidate > now) return candidate
+    if (candidate > now) {
+      const adjusted = applyHoliday(candidate)
+      if (adjusted) return adjusted
+    }
     year++
   }
   return null
@@ -252,6 +329,8 @@ function getNextLunar(alarm: AlarmItem, now: Date): Date | null {
   const lunarMonth = alarm.repeat.lunarMonth ?? 1
   const lunarDay = alarm.repeat.lunarDay ?? 1
   const nowYear = now.getFullYear()
+  const action: HolidayAction = alarm.repeat.holidayAction ?? "none"
+  const settings = loadSettings()
 
   // 先试今年
   for (let yearOffset = 0; yearOffset < 3; yearOffset++) {
@@ -259,7 +338,22 @@ function getNextLunar(alarm: AlarmItem, now: Date): Date | null {
     try {
       const solarDate = lunarToSolar(lunarYear, lunarMonth, lunarDay)
       solarDate.setHours(alarm.hour, alarm.minute, 0, 0)
-      if (solarDate > now) return solarDate
+      if (solarDate > now) {
+        // 调休动作
+        if (action === "skip") {
+          if (settings.holidayAutoSkip && isHoliday(solarDate)) continue
+          if (isWorkday(solarDate)) return solarDate
+          return solarDate
+        } else if (action === "defer") {
+          if (isHoliday(solarDate)) {
+            const deferred = deferPastHoliday(solarDate)
+            deferred.setHours(alarm.hour, alarm.minute, 0, 0)
+            return deferred
+          }
+          return solarDate
+        }
+        return solarDate
+      }
     } catch (e) {
       // 农历数据表范围外，跳过
       continue
@@ -270,8 +364,8 @@ function getNextLunar(alarm: AlarmItem, now: Date): Date | null {
 
 // ==================== workday: 每N工作日 ====================
 function getNextWorkday(alarm: AlarmItem, now: Date): Date | null {
-  const settings = loadSettings()
   const interval = alarm.repeat.interval || 1
+  const action: HolidayAction = alarm.repeat.holidayAction ?? "skip"
 
   let workdayCount = 0
   for (let offset = 0; offset < 30; offset++) {
@@ -288,12 +382,18 @@ function getNextWorkday(alarm: AlarmItem, now: Date): Date | null {
     const isWork = isWorkday(candidate)
 
     let isWorkdayToday = false
-    if (isWork) {
-      isWorkdayToday = true // 补班日
-    } else if (isHol) {
-      isWorkdayToday = false // 节假日
-    } else if (!isWeekend) {
-      isWorkdayToday = true // 普通工作日
+    if (action === "none") {
+      // 不查调休：纯周一到周五
+      isWorkdayToday = !isWeekend
+    } else {
+      // skip / defer：查调休日历
+      if (isWork) {
+        isWorkdayToday = true // 补班日
+      } else if (isHol) {
+        isWorkdayToday = false // 节假日
+      } else if (!isWeekend) {
+        isWorkdayToday = true // 普通工作日
+      }
     }
 
     if (isWorkdayToday) {
@@ -339,6 +439,13 @@ export function formatCountdown(target: Date, now: Date): string {
 }
 
 // ==================== 格式化重复描述 ====================
+// 调休动作后缀
+function holidaySuffix(action: HolidayAction | undefined): string {
+  if (action === "skip") return "（节假日跳过）"
+  if (action === "defer") return "（节假日顺延）"
+  return ""
+}
+
 export function formatRepeatDescription(repeat: RepeatRule): string {
   const weekdayLabels = ["日", "一", "二", "三", "四", "五", "六"]
 
@@ -346,43 +453,48 @@ export function formatRepeatDescription(repeat: RepeatRule): string {
     case "once":
       return "仅一次"
 
-    case "daily":
-      if (repeat.interval === 1) return "每天"
-      return `每${repeat.interval}天`
+    case "daily": {
+      const base = repeat.interval === 1 ? "每天" : `每${repeat.interval}天`
+      return base + holidaySuffix(repeat.holidayAction)
+    }
 
     case "weekly": {
       const days = (repeat.weekdays ?? []).sort()
       const labels = days.map((d) => weekdayLabels[d - 1]).join("至")
       const prefix = repeat.interval === 1 ? "" : `每${repeat.interval}周 `
-      if (repeat.holidayAware) {
-        return `${prefix}每周${labels}（智能调休）`
-      }
-      return `${prefix}每周${labels}`
+      return `${prefix}每周${labels}${holidaySuffix(repeat.holidayAction)}`
     }
 
     case "monthly": {
       const subMode = repeat.monthlySubMode ?? "day"
+      let base: string
       if (subMode === "weekday" && repeat.weekOfMonth && repeat.weekdayOfMonth) {
         const weekLabel = repeat.weekOfMonth === -1 ? "最后一" : `第${repeat.weekOfMonth}`
-        return `每月${weekLabel}周星期${weekdayLabels[repeat.weekdayOfMonth - 1]}`
+        base = `每月${weekLabel}周星期${weekdayLabels[repeat.weekdayOfMonth - 1]}`
+      } else {
+        base = repeat.interval === 1 ? `每月${repeat.dayOfMonth}号` : `每${repeat.interval}月 ${repeat.dayOfMonth}号`
       }
-      if (repeat.interval === 1) return `每月${repeat.dayOfMonth}号`
-      return `每${repeat.interval}月 ${repeat.dayOfMonth}号`
+      return base + holidaySuffix(repeat.holidayAction)
     }
 
     case "yearly": {
       const subMode = repeat.yearlySubMode ?? (repeat.solarTerm ? "solarTerm" : "date")
-      if (subMode === "solarTerm" && repeat.solarTerm) return `每年${repeat.solarTerm}`
-      if (subMode === "nthWorkday" && repeat.nthWorkdayOfYear) return `每年第${repeat.nthWorkdayOfYear}个工作日`
-      if (subMode === "weekday" && repeat.monthOfYear && repeat.weekOfMonth && repeat.weekdayOfMonth) {
+      let base: string
+      if (subMode === "solarTerm" && repeat.solarTerm) {
+        base = `每年${repeat.solarTerm}`
+      } else if (subMode === "nthWorkday" && repeat.nthWorkdayOfYear) {
+        base = `每年第${repeat.nthWorkdayOfYear}个工作日`
+      } else if (subMode === "weekday" && repeat.monthOfYear && repeat.weekOfMonth && repeat.weekdayOfMonth) {
         const weekLabel = repeat.weekOfMonth === -1 ? "最后一" : `第${repeat.weekOfMonth}`
-        return `每年${repeat.monthOfYear}月${weekLabel}周星期${weekdayLabels[repeat.weekdayOfMonth - 1]}`
+        base = `每年${repeat.monthOfYear}月${weekLabel}周星期${weekdayLabels[repeat.weekdayOfMonth - 1]}`
+      } else {
+        base = `每年${repeat.monthOfYear}月${repeat.dayOfMonth}号`
       }
-      return `每年${repeat.monthOfYear}月${repeat.dayOfMonth}号`
+      return base + holidaySuffix(repeat.holidayAction)
     }
 
     case "lunar_yearly":
-      return `农历每年${repeat.lunarMonth}月${repeat.lunarDay}`
+      return `农历每年${repeat.lunarMonth}月${repeat.lunarDay}${holidaySuffix(repeat.holidayAction)}`
 
     case "workday":
       if (repeat.interval === 1) return "每个工作日"

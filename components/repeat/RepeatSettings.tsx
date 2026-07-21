@@ -29,7 +29,7 @@ const REPEAT_MODES: { value: RepeatMode; label: string }[] = [
 const DEFAULT_RULE: RepeatRule = {
   mode: "weekly",
   interval: 1,
-  holidayAware: true,
+  holidayAction: "none",
   weekdays: [2, 3, 4, 5, 6],
 }
 
@@ -105,7 +105,7 @@ function RepeatModePickerPage({ rule, onSelected }: { rule: Observable<RepeatRul
     const newRule: RepeatRule = {
       mode,
       interval: 1,
-      holidayAware: rule.value.holidayAware,
+      holidayAction: rule.value.holidayAction ?? "none",
     }
     if (mode === "weekly") {
       newRule.weekdays = rule.value.weekdays ?? [2, 3, 4, 5, 6]

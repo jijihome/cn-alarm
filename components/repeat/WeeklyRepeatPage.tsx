@@ -1,7 +1,8 @@
 // WeeklyRepeatPage.tsx - 每周模式专属设置页
-import { useObservable, List, Section, Text, Stepper, Toggle, HStack, Spacer } from "scripting"
-import { RepeatRule } from "../../lib/constants"
+import { useObservable, List, Section, Text, Stepper, HStack, Spacer } from "scripting"
+import { RepeatRule, HolidayAction } from "../../lib/constants"
 import { WeekdayPicker } from "../WeekdayPicker"
+import { HolidayActionPicker } from "./HolidayActionPicker"
 
 const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"]
 
@@ -13,14 +14,14 @@ export function WeeklyRepeatPage({ rule }: WeeklyRepeatPageProps) {
   const init = rule.value
   const interval = useObservable(init.interval ?? 1)
   const weekdays = useObservable<number[]>(init.weekdays ?? [2, 3, 4, 5, 6])
-  const holidayAware = useObservable(init.holidayAware ?? true)
+  const holidayAction = useObservable<HolidayAction>(init.holidayAction ?? "none")
 
   const sync = () => {
     rule.setValue({
       mode: "weekly",
       interval: interval.value,
       weekdays: weekdays.value,
-      holidayAware: holidayAware.value,
+      holidayAction: holidayAction.value,
     })
   }
 
@@ -60,18 +61,10 @@ export function WeeklyRepeatPage({ rule }: WeeklyRepeatPageProps) {
         </Stepper>
       </Section>
 
-      <Section header={<Text>智能调休</Text>}>
-        <Toggle
-          title="调休联动"
-          value={holidayAware.value}
-          onChanged={(v: boolean) => { holidayAware.setValue(v); sync() }}
-        />
-        <Text font={13} foregroundStyle="tertiaryLabel">
-          {holidayAware.value
-            ? "法定节假日自动跳过，补班日自动响铃"
-            : "不受调休影响，选定星期固定响铃"}
-        </Text>
-      </Section>
+      <HolidayActionPicker
+        value={holidayAction.value}
+        onChanged={(v) => { holidayAction.setValue(v); sync() }}
+      />
     </List>
   )
 }

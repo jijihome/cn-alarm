@@ -1,5 +1,6 @@
 // holiday.ts - 调休日历判断逻辑
 import { STORAGE_KEYS, DEFAULT_HOLIDAYS, HolidayCalendar, RepeatRule, AppSettings } from "./constants"
+import { HolidayAction } from "./constants"
 
 const SHARED = { shared: true }
 
@@ -40,11 +41,15 @@ export function isWorkday(date: Date, calendars?: HolidayCalendar[]): boolean {
 export function shouldRing(date: Date, repeat: RepeatRule, settings: AppSettings, calendars?: HolidayCalendar[]): boolean {
   if (repeat.mode === "once") return true
 
-  if (repeat.holidayAware) {
-    // 节假日 → 跳过
-    if (settings.holidayAutoSkip && isHoliday(date, calendars)) return false
+  const action: HolidayAction = repeat.holidayAction ?? "none"
+  const isHol = isHoliday(date, calendars)
+  const isWork = isWorkday(date, calendars)
+
+  // 调休动作处理（skip/defer 在 shouldRing 语义里都是「节假日当天不响」）
+  if (action === "skip" || action === "defer") {
+    if (settings.holidayAutoSkip && isHol) return false
     // 补班日 → 响铃（即使周末）
-    if (isWorkday(date, calendars)) return true
+    if (isWork) return true
   }
 
   // 按星期判断（weekly 模式）
@@ -59,16 +64,16 @@ export function shouldRing(date: Date, repeat: RepeatRule, settings: AppSettings
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
     if (isWeekend) {
       // 周末只有补班日才响
-      return isWorkday(date, calendars)
+      return isWork
     }
     // 工作日：节假日不响，否则响
-    if (repeat.holidayAware && isHoliday(date, calendars)) return false
+    if (action !== "none" && isHol) return false
     return true
   }
 
-  // daily 模式：每天都响（除非 holidayAware + 节假日）
+  // daily 模式：每天都响（除非 skip/defer + 节假日）
   if (repeat.mode === "daily") {
-    if (repeat.holidayAware && settings.holidayAutoSkip && isHoliday(date, calendars)) return false
+    if (action !== "none" && settings.holidayAutoSkip && isHol) return false
     return true
   }
 

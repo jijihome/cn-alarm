@@ -1,5 +1,5 @@
 // alarm-store.ts - 闹钟数据 CRUD + Storage 操作
-import { STORAGE_KEYS, DEFAULT_GROUPS, DEFAULT_SETTINGS, DEFAULT_HOLIDAYS, AlarmItem, AlarmGroup, AppSettings } from "./constants"
+import { STORAGE_KEYS, DEFAULT_GROUPS, DEFAULT_SETTINGS, DEFAULT_HOLIDAYS, AlarmItem, AlarmGroup, AppSettings, normalizeRule } from "./constants"
 
 // ==================== Storage 共享选项 ====================
 const SHARED = { shared: true }
@@ -16,7 +16,9 @@ export function generateUUID(): string {
 // ==================== 闹钟 CRUD ====================
 export function loadAlarms(): AlarmItem[] {
   const data = Storage.get<AlarmItem[]>(STORAGE_KEYS.ITEMS, SHARED)
-  return data ?? []
+  if (!data) return []
+  // 迁移旧 holidayAware → holidayAction
+  return data.map((a) => ({ ...a, repeat: normalizeRule(a.repeat) }))
 }
 
 export function saveAlarms(items: AlarmItem[]): void {
@@ -98,7 +100,7 @@ export function createAlarmItem(partial: Partial<AlarmItem>): AlarmItem {
       mode: "weekly",
       interval: 1,
       weekdays: [2, 3, 4, 5, 6],
-      holidayAware: true,
+      holidayAction: "skip",
     },
     enabled: true,
     gradualWake: false,

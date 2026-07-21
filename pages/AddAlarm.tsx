@@ -24,7 +24,7 @@ const PRESET_PRE_ALERT_LABELS = ["5分钟", "10分钟", "15分钟", "30分钟"]
 const DEFAULT_REPEAT_RULE: RepeatRule = {
   mode: "weekly",
   interval: 1,
-  holidayAware: true,
+  holidayAction: "none",
   weekdays: [2, 3, 4, 5, 6],
 }
 

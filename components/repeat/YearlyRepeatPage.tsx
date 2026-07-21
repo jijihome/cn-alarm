@@ -2,9 +2,10 @@
 // 支持4种子模式：按日期 / 按星期(某月第N周星期X) / 按节气 / 第N个工作日
 // 状态模式：useObservable + subscribe 监听变化触发 sync
 import { useObservable, useEffect, List, Section, Text, Picker } from "scripting"
-import { RepeatRule, YearlySubMode } from "../../lib/constants"
+import { RepeatRule, YearlySubMode, HolidayAction } from "../../lib/constants"
 import { WEEKDAY_LABELS } from "../../lib/constants"
 import { SOLAR_TERM_NAMES } from "../../lib/solar-term"
+import { HolidayActionPicker } from "./HolidayActionPicker"
 
 const MONTH_LABELS = Array.from({ length: 12 }, (_, i) => `${i + 1}月`)
 const DAY_LABELS = Array.from({ length: 31 }, (_, i) => `${i + 1}号`)
@@ -36,6 +37,7 @@ export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
   })()
   const solarTermIdx = useObservable(initialSolarIdx)
   const nthWorkday = useObservable(init.nthWorkdayOfYear ?? 1)
+  const holidayAction = useObservable<HolidayAction>(init.holidayAction ?? "none")
 
   const sync = () => {
     const subMode = SUB_MODE_VALUES[subModeIdx.value]
@@ -43,7 +45,7 @@ export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
       mode: "yearly",
       interval: 1,
       yearlySubMode: subMode,
-      holidayAware: false,
+      holidayAction: holidayAction.value,
     }
     if (subMode === "date") {
       newRule.monthOfYear = monthOfYear.value
@@ -71,6 +73,7 @@ export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
     weekdayOfMonth.subscribe(onLocalChange)
     solarTermIdx.subscribe(onLocalChange)
     nthWorkday.subscribe(onLocalChange)
+    holidayAction.subscribe(onLocalChange)
     return () => {
       subModeIdx.unsubscribe(onLocalChange)
       monthOfYear.unsubscribe(onLocalChange)
@@ -79,6 +82,7 @@ export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
       weekdayOfMonth.unsubscribe(onLocalChange)
       solarTermIdx.unsubscribe(onLocalChange)
       nthWorkday.unsubscribe(onLocalChange)
+      holidayAction.unsubscribe(onLocalChange)
     }
   }, [])
 
@@ -162,6 +166,11 @@ export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
           </Text>
         </Section>
       )}
+
+      <HolidayActionPicker
+        value={holidayAction.value}
+        onChanged={(v) => { holidayAction.setValue(v) }}
+      />
     </List>
   )
 }

@@ -2,8 +2,9 @@
 // 支持两种子模式：按日期（每月N号） / 按星期（每月第N周星期X）
 // 状态模式：useObservable + subscribe 监听变化触发 sync
 import { useObservable, useEffect, List, Section, Text, Picker } from "scripting"
-import { RepeatRule, MonthlySubMode } from "../../lib/constants"
+import { RepeatRule, MonthlySubMode, HolidayAction } from "../../lib/constants"
 import { WEEKDAY_LABELS } from "../../lib/constants"
+import { HolidayActionPicker } from "./HolidayActionPicker"
 
 const DAY_LABELS = Array.from({ length: 31 }, (_, i) => `${i + 1}号`)
 const WEEK_OF_MONTH_LABELS = ["第一周", "第二周", "第三周", "第四周", "最后一周"]
@@ -26,6 +27,7 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
     return idx >= 0 ? idx : 0
   })
   const weekdayOfMonth = useObservable(init.weekdayOfMonth ?? 2)
+  const holidayAction = useObservable<HolidayAction>(init.holidayAction ?? "none")
 
   // sync: 将本地 Observable 状态写入 rule
   const sync = () => {
@@ -34,7 +36,7 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
       mode: "monthly",
       interval: 1,
       monthlySubMode: subMode,
-      holidayAware: false,
+      holidayAction: holidayAction.value,
     }
     if (subMode === "day") {
       newRule.dayOfMonth = dayOfMonth.value
@@ -52,11 +54,13 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
     dayOfMonth.subscribe(onLocalChange)
     weekOfMonthIdx.subscribe(onLocalChange)
     weekdayOfMonth.subscribe(onLocalChange)
+    holidayAction.subscribe(onLocalChange)
     return () => {
       subModeIdx.unsubscribe(onLocalChange)
       dayOfMonth.unsubscribe(onLocalChange)
       weekOfMonthIdx.unsubscribe(onLocalChange)
       weekdayOfMonth.unsubscribe(onLocalChange)
+      holidayAction.unsubscribe(onLocalChange)
     }
   }, [])
 
@@ -106,6 +110,11 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
             : "最后一周=该月最后一个该星期几"}
         </Text>
       </Section>
+
+      <HolidayActionPicker
+        value={holidayAction.value}
+        onChanged={(v) => { holidayAction.setValue(v) }}
+      />
     </List>
   )
 }

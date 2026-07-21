@@ -1,6 +1,7 @@
 // LunarRepeatPage.tsx - 农历每年模式专属设置页
 import { useObservable, List, Section, Text, Picker } from "scripting"
-import { RepeatRule } from "../../lib/constants"
+import { RepeatRule, HolidayAction } from "../../lib/constants"
+import { HolidayActionPicker } from "./HolidayActionPicker"
 
 const LUNAR_MONTH_LABELS = [
   "正月", "二月", "三月", "四月", "五月", "六月",
@@ -28,6 +29,7 @@ export function LunarRepeatPage({ rule }: LunarRepeatPageProps) {
   const init = rule.value
   const lunarMonth = useObservable(init.lunarMonth ?? 1)
   const lunarDay = useObservable(init.lunarDay ?? 1)
+  const holidayAction = useObservable<HolidayAction>(init.holidayAction ?? "none")
 
   const sync = () => {
     rule.setValue({
@@ -35,7 +37,7 @@ export function LunarRepeatPage({ rule }: LunarRepeatPageProps) {
       interval: 1,
       lunarMonth: lunarMonth.value,
       lunarDay: lunarDay.value,
-      holidayAware: false,
+      holidayAction: holidayAction.value,
     })
   }
 
@@ -62,6 +64,11 @@ export function LunarRepeatPage({ rule }: LunarRepeatPageProps) {
           系统将自动换算为对应的公历日期
         </Text>
       </Section>
+
+      <HolidayActionPicker
+        value={holidayAction.value}
+        onChanged={(v) => { holidayAction.setValue(v); sync() }}
+      />
     </List>
   )
 }

@@ -20,6 +20,9 @@ export const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"]
 // ==================== 数据类型定义 ====================
 export type RepeatMode = "once" | "daily" | "weekly" | "monthly" | "yearly" | "lunar_yearly" | "workday"
 
+/** 调休动作三选一：none=不查调休 / skip=节假日跳过(补班日额外响) / defer=节假日当天顺延到下一个非节假日 */
+export type HolidayAction = "none" | "skip" | "defer"
+
 /** 每月/每年的子模式：按日期 vs 按第N周星期X */
 export type MonthlySubMode = "day" | "weekday"
 export type YearlySubMode = "date" | "weekday" | "solarTerm" | "nthWorkday"
@@ -42,8 +45,20 @@ export interface RepeatRule {
   lunarMonth?: number
   lunarDay?: number
   solarTerm?: string
-  holidayAware: boolean
+  /** 调休动作：none/skip/defer。旧数据 holidayAware 通过 normalizeRule 迁移 */
+  holidayAction: HolidayAction
   anchorDate?: string
+}
+
+/** 把旧 RepeatRule（holidayAware: boolean）迁移到新 holidayAction 枚举 */
+export function normalizeRule(rule: RepeatRule): RepeatRule {
+  // 兼容旧字段：如果 holidayAction 缺失但有 holidayAware，做迁移
+  const r = rule as any
+  if (r.holidayAction === undefined) {
+    r.holidayAction = r.holidayAware === true ? "skip" : "none"
+  }
+  delete r.holidayAware
+  return r as RepeatRule
 }
 
 export interface AlarmItem {

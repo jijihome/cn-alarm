@@ -85,7 +85,7 @@ function createCardAlarm(card: CreditCard, date: Date, titleSuffix: string, tint
     repeat: {
       mode: "once",
       interval: 1,
-      holidayAware: false,
+      holidayAction: "none",
       anchorDate: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
     },
     enabled: true,
