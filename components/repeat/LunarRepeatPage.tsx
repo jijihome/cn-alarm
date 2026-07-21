@@ -43,7 +43,7 @@ export function LunarRepeatPage({ rule }: LunarRepeatPageProps) {
 
   return (
     <List navigationTitle="农历每年" navigationBarTitleDisplayMode="inline">
-      <Section header={<Text>农历日期</Text>}>
+      <Section header={<Text>农历日期</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">系统将自动换算为对应的公历日期</Text>}>
         <Picker
           title="农历月"
           value={lunarMonth as any}
@@ -58,11 +58,6 @@ export function LunarRepeatPage({ rule }: LunarRepeatPageProps) {
         >
           {LUNAR_DAY_LABELS.map((label, idx) => <Text key={idx} tag={idx + 1}>{label}</Text>)}
         </Picker>
-      </Section>
-      <Section>
-        <Text foregroundStyle="tertiaryLabel">
-          系统将自动换算为对应的公历日期
-        </Text>
       </Section>
 
       <HolidayActionPicker

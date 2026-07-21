@@ -27,18 +27,13 @@ export function OnceRepeatPage({ rule }: OnceRepeatPageProps) {
 
   return (
     <List navigationTitle="仅一次" navigationBarTitleDisplayMode="inline">
-      <Section header={<Text>选择日期</Text>}>
+      <Section header={<Text>选择日期</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">闹钟将在选定日期响一次后自动关闭</Text>}>
         <DatePicker
           title="闹钟日期"
           displayedComponents={["date"]}
           value={anchorDate}
           datePickerStyle="wheel"
         />
-      </Section>
-      <Section>
-        <Text foregroundStyle="tertiaryLabel">
-          闹钟将在选定日期响一次后自动关闭
-        </Text>
       </Section>
     </List>
   )

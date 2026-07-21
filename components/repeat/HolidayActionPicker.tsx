@@ -19,7 +19,7 @@ export function HolidayActionPicker({ value, onChanged }: HolidayActionPickerPro
   const current = ACTION_LABELS.find((a) => a.value === value) ?? ACTION_LABELS[0]
 
   return (
-    <Section header={<Text>调休</Text>}>
+    <Section header={<Text>调休</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">{current.desc}</Text>}>
       {ACTION_LABELS.map((a) => {
         const selected = a.value === value
         return (
@@ -35,9 +35,6 @@ export function HolidayActionPicker({ value, onChanged }: HolidayActionPickerPro
           </Button>
         )
       })}
-      <Text font={13} foregroundStyle="tertiaryLabel">
-        {current.desc}
-      </Text>
     </Section>
   )
 }

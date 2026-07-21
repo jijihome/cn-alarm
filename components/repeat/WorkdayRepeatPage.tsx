@@ -21,14 +21,10 @@ export function WorkdayRepeatPage({ rule }: WorkdayRepeatPageProps) {
 
   return (
     <List navigationTitle="每工作日" navigationBarTitleDisplayMode="inline">
-      <Section header={<Text>工作日响铃</Text>}>
-        <Text font={15}>
-          周一至周五自动响铃
-        </Text>
-        <Text foregroundStyle="secondaryLabel">
-          interval 固定为 1，无需设置间隔
-        </Text>
-      </Section>
+      <Section
+        header={<Text>工作日响铃</Text>}
+        footer={<Text font="footnote" foregroundStyle="systemGray">自动在周一至周五响铃，法定节假日自动跳过，调休补班日补响</Text>}
+      />
 
       <HolidayActionPicker
         value={holidayAction.value}

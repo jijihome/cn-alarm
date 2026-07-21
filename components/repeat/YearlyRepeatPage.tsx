@@ -140,30 +140,24 @@ export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
       )}
 
       {subMode === "solarTerm" && (
-        <Section header={<Text>节气</Text>}>
+        <Section header={<Text>节气</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">每年「{SOLAR_TERM_NAMES[solarTermIdx.value]}」当天提醒</Text>}>
           <Picker
             title="节气"
             value={solarTermIdx as any}
           >
             {SOLAR_TERM_NAMES.map((label, idx) => <Text key={idx} tag={idx}>{label}</Text>)}
           </Picker>
-          <Text foregroundStyle="secondaryLabel">
-            每年「{SOLAR_TERM_NAMES[solarTermIdx.value]}」当天提醒
-          </Text>
         </Section>
       )}
 
       {subMode === "nthWorkday" && (
-        <Section header={<Text>第N个工作日</Text>}>
+        <Section header={<Text>第N个工作日</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">每年第{nthWorkday.value}个工作日提醒</Text>}>
           <Picker
             title="第几个"
             value={nthWorkday as any}
           >
             {Array.from({ length: 260 }, (_, i) => <Text key={i} tag={i + 1}>{i + 1}</Text>)}
           </Picker>
-          <Text foregroundStyle="secondaryLabel">
-            每年第{nthWorkday.value}个工作日提醒
-          </Text>
         </Section>
       )}
 

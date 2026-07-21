@@ -36,7 +36,7 @@ export function Settings() {
     <NavigationStack>
       <List navigationTitle="设置">
         {/* 调休日历 */}
-        <Section header={<Text>调休日历</Text>} footer={<Text>在闹钟的重复设置中选择调休动作（跳过/顺延），法定节假日当天自动处理</Text>}>
+        <Section header={<Text>调休日历</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">在闹钟的重复设置中选择调休动作（跳过/顺延），法定节假日当天自动处理</Text>}>
           <NavigationLink destination={<HolidayEditor />}>
             <HStack alignment="center">
               <Text>节假日安排</Text>

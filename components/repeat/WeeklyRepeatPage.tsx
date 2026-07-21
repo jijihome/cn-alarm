@@ -33,7 +33,7 @@ export function WeeklyRepeatPage({ rule }: WeeklyRepeatPageProps) {
 
   return (
     <List navigationTitle="每周" navigationBarTitleDisplayMode="inline">
-      <Section header={<Text>选择星期</Text>}>
+      <Section header={<Text>选择星期</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">已选：{weekdaySummary}</Text>}>
         <WeekdayPicker
           value={weekdays.value}
           onChanged={(v) => {
@@ -43,9 +43,6 @@ export function WeeklyRepeatPage({ rule }: WeeklyRepeatPageProps) {
             }
           }}
         />
-        <Text font={14} foregroundStyle="secondaryLabel">
-          已选：{weekdaySummary}
-        </Text>
       </Section>
 
       <Section header={<Text>间隔</Text>}>

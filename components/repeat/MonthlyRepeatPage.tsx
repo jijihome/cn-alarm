@@ -78,7 +78,7 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
       </Section>
 
       {subMode === "day" ? (
-        <Section header={<Text>选择日期</Text>}>
+        <Section header={<Text>选择日期</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">2月无29/30/31号时将自动取当月最后一天</Text>}>
           <Picker
             title="每月第几天"
             value={dayOfMonth as any}
@@ -87,7 +87,7 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
           </Picker>
         </Section>
       ) : (
-        <Section header={<Text>选择星期</Text>}>
+        <Section header={<Text>选择星期</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">最后一周=该月最后一个该星期几</Text>}>
           <Picker
             title="第几周"
             value={weekOfMonthIdx as any}
@@ -102,14 +102,6 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
           </Picker>
         </Section>
       )}
-
-      <Section>
-        <Text foregroundStyle="tertiaryLabel">
-          {subMode === "day"
-            ? "2月无29/30/31号时将自动取当月最后一天"
-            : "最后一周=该月最后一个该星期几"}
-        </Text>
-      </Section>
 
       <HolidayActionPicker
         value={holidayAction.value}
