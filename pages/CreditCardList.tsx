@@ -4,6 +4,10 @@ import { CreditCard } from "../lib/constants"
 import { loadCards, updateCard, deleteCard, getNextDueDate, formatDateCN } from "../lib/credit-card"
 import { AddCreditCard } from "./AddCreditCard"
 
+/** 按银行名拼音排序加载信用卡 */
+const loadSortedCards = (): CreditCard[] =>
+  loadCards().sort((a, b) => a.bankName.localeCompare(b.bankName, "zh"))
+
 function CardRow({ card, onEdit, onToggle }: { card: CreditCard; onEdit: (id: string) => void; onToggle: (id: string, enabled: boolean) => void }) {
   const nextDue = getNextDueDate(card)
   const dueStr = formatDateCN(nextDue)
@@ -34,7 +38,7 @@ function CardRow({ card, onEdit, onToggle }: { card: CreditCard; onEdit: (id: st
 }
 
 export function CreditCardList() {
-  const cards = useObservable<CreditCard[]>(() => loadCards())
+  const cards = useObservable<CreditCard[]>(() => loadSortedCards())
   // toast 状态
   const [toastMsg, setToastMsg] = useState("")
   const [toastShown, setToastShown] = useState(false)
@@ -52,7 +56,7 @@ export function CreditCardList() {
         setToastMsg(editId ? "信用卡已更新" : "信用卡已添加")
         setToastShown(true)
       }
-      cards.setValue(loadCards())
+      cards.setValue(loadSortedCards())
     })
   }
 

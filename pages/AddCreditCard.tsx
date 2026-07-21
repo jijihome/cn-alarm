@@ -28,7 +28,11 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
   const [toastMsg, setToastMsg] = useState("")
   const [toastShown, setToastShown] = useState(false)
 
-  const bankName = useObservable(existing?.bankName ?? "招商银行")
+  const bankLabels = BANK_PRESETS.map((b) => b.name)
+  const CUSTOM_TAG = "__custom__"
+  const isPresetBank = existing ? bankLabels.includes(existing.bankName) : true
+  const isCustom = useObservable(!isPresetBank)
+  const bankName = useObservable(existing?.bankName ?? BANK_PRESETS[0].name)
   const last4Digits = useObservable(existing?.last4Digits ?? "")
   const statementDay = useObservable(existing?.statementDay ?? 5)
   const graceDays = useObservable(existing?.graceDays ?? 18)
@@ -36,9 +40,14 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
   const remindDaysBefore = useObservable(existing?.remindDaysBefore ?? 3)
   const tintColor = useObservable(existing?.tintColor ?? "systemOrange")
 
-  const bankLabels = BANK_PRESETS.map((b) => b.name)
+  const pickerValue = isCustom.value ? CUSTOM_TAG : bankName.value
 
   const handleSave = () => {
+    if (!bankName.value.trim()) {
+      setToastMsg("请输入银行名称")
+      setToastShown(true)
+      return
+    }
     if (!last4Digits.value.trim() || last4Digits.value.length !== 4) {
       setToastMsg("请输入4位卡号尾号")
       setToastShown(true)
@@ -106,11 +115,24 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
         <Section header={<Text>银行信息</Text>}>
           <Picker
             title="银行"
-            value={bankName}
+            value={pickerValue}
+            onChanged={(val: string) => {
+              if (val === CUSTOM_TAG) {
+                isCustom.setValue(true)
+                bankName.setValue("")
+              } else {
+                isCustom.setValue(false)
+                bankName.setValue(val)
+              }
+            }}
           >
             {bankLabels.map((label) => <Text key={label} tag={label}>{label}</Text>)}
+            <Text key={CUSTOM_TAG} tag={CUSTOM_TAG}>自定义</Text>
           </Picker>
-          <TextField title="卡号尾4位" value={last4Digits} prompt="如 8888" />
+          {isCustom.value && (
+            <TextField title="银行名称" value={bankName} prompt="输入银行名称" />
+          )}
+          <TextField title="卡号尾4位" value={last4Digits} prompt="如 8888" keyboardType="numberPad" />
         </Section>
 
         <Section header={<Text>日期设置</Text>}>

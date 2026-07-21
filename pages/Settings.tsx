@@ -1,15 +1,10 @@
 // Settings.tsx - 设置页
-import { useObservable, NavigationStack, List, Section, Text, Toggle, Picker, Button, NavigationLink, HStack, Spacer } from "scripting"
+import { useObservable, NavigationStack, List, Section, Text, Toggle, Stepper, Button, NavigationLink, HStack, Spacer } from "scripting"
 import { loadSettings, saveSettings, loadGroups } from "../lib/alarm-store"
 import { loadHolidays, resetYearToDefault } from "../lib/holiday"
 import { AppSettings, HolidayCalendar } from "../lib/constants"
 import { HolidayEditor } from "./HolidayEditor"
 import { GroupManager } from "./GroupManager"
-
-const PRE_ALERT_OPTIONS = [300, 600, 900, 1800]
-const PRE_ALERT_LABELS = ["5分钟", "10分钟", "15分钟", "30分钟"]
-const REMIND_BEFORE_OPTIONS = [1, 2, 3, 5, 7]
-const REMIND_BEFORE_LABELS = ["1天", "2天", "3天", "5天", "7天"]
 
 export function Settings() {
   const settings = useObservable<AppSettings>(() => loadSettings())
@@ -54,26 +49,18 @@ export function Settings() {
             value={settings.value.defaultGradualWake ? true : false}
             onChanged={(v: boolean) => updateSetting({ defaultGradualWake: v })}
           />
-          <Picker
-            title="默认轻提醒提前量"
-            value={(() => {
-              const idx = PRE_ALERT_OPTIONS.indexOf(settings.value.defaultPreAlert)
-              return idx >= 0 ? idx : 0
-            })()}
-            onChanged={(idx: number) => updateSetting({ defaultPreAlert: PRE_ALERT_OPTIONS[idx] })}
+          <Stepper
+            onIncrement={() => updateSetting({ defaultPreAlert: settings.value.defaultPreAlert + 60 })}
+            onDecrement={() => updateSetting({ defaultPreAlert: Math.max(60, settings.value.defaultPreAlert - 60) })}
           >
-            {PRE_ALERT_LABELS.map((label, idx) => <Text key={label} tag={idx}>{label}</Text>)}
-          </Picker>
-          <Picker
-            title="信用卡默认提前"
-            value={(() => {
-              const idx = REMIND_BEFORE_OPTIONS.indexOf(settings.value.defaultRemindDaysBefore)
-              return idx >= 0 ? idx : 0
-            })()}
-            onChanged={(idx: number) => updateSetting({ defaultRemindDaysBefore: REMIND_BEFORE_OPTIONS[idx] })}
+            <Text>轻提醒提前 {Math.floor(settings.value.defaultPreAlert / 60)} 分钟</Text>
+          </Stepper>
+          <Stepper
+            onIncrement={() => updateSetting({ defaultRemindDaysBefore: settings.value.defaultRemindDaysBefore + 1 })}
+            onDecrement={() => updateSetting({ defaultRemindDaysBefore: Math.max(1, settings.value.defaultRemindDaysBefore - 1) })}
           >
-            {REMIND_BEFORE_LABELS.map((label, idx) => <Text key={label} tag={idx}>{label}</Text>)}
-          </Picker>
+            <Text>提前 {settings.value.defaultRemindDaysBefore} 天</Text>
+          </Stepper>
         </Section>
 
         {/* 数据管理 */}
