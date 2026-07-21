@@ -1,9 +1,10 @@
 // Settings.tsx - 设置页
 import { useObservable, NavigationStack, List, Section, Text, Toggle, Picker, Button, NavigationLink, HStack, Spacer } from "scripting"
-import { loadSettings, saveSettings } from "../lib/alarm-store"
+import { loadSettings, saveSettings, loadGroups } from "../lib/alarm-store"
 import { loadHolidays, resetYearToDefault } from "../lib/holiday"
 import { AppSettings, HolidayCalendar } from "../lib/constants"
 import { HolidayEditor } from "./HolidayEditor"
+import { GroupManager } from "./GroupManager"
 
 const PRE_ALERT_OPTIONS = [300, 600, 900, 1800]
 const PRE_ALERT_LABELS = ["5分钟", "10分钟", "15分钟", "30分钟"]
@@ -13,6 +14,7 @@ const REMIND_BEFORE_LABELS = ["1天", "2天", "3天", "5天", "7天"]
 export function Settings() {
   const settings = useObservable<AppSettings>(() => loadSettings())
   const holidays = useObservable<HolidayCalendar[]>(() => loadHolidays())
+  const groupCount = loadGroups().length
 
   const updateSetting = (updates: Partial<AppSettings>) => {
     const newSettings = { ...settings.value, ...updates }
@@ -80,6 +82,13 @@ export function Settings() {
 
         {/* 数据管理 */}
         <Section header={<Text>数据管理</Text>}>
+          <NavigationLink destination={<GroupManager />}>
+            <HStack alignment="center">
+              <Text>闹钟分类</Text>
+              <Spacer />
+              <Text foregroundStyle="secondaryLabel">{groupCount} 个分类</Text>
+            </HStack>
+          </NavigationLink>
           <Button title="重置调休日历为默认值" action={handleResetHolidays} />
           <Text font={13} foregroundStyle="secondaryLabel">中国闹钟 v1.0.0</Text>
         </Section>

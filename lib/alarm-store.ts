@@ -59,13 +59,77 @@ export function getEnabled(): AlarmItem[] {
 }
 
 // ==================== 分组操作 ====================
+// 已知无效图标名 → 正确名映射（SF Symbol 7 验证）
+const ICON_MIGRATIONS: Record<string, string> = {
+  "figure.run.fill": "graduationcap.fill",
+  "note.text": "list.bullet",
+  "doc": "document",
+  "doc.fill": "document.fill",
+  "doc.text": "text.document",
+  "doc.text.fill": "text.document.fill",
+  "wrench": "wrench.and.screwdriver",
+  "wrench.fill": "wrench.and.screwdriver.fill",
+  "airplane.fill": "airplane",
+  "navigate": "location.north",
+  "navigate.fill": "location.north.fill",
+  "snow": "snowflake",
+  "thermometer": "thermometer.medium",
+  "timer.square": "timer",
+}
+
+function migrateGroupIcons(groups: AlarmGroup[]): AlarmGroup[] {
+  let changed = false
+  const result = groups.map(g => {
+    const newIcon = ICON_MIGRATIONS[g.icon]
+    if (newIcon) {
+      changed = true
+      return { ...g, icon: newIcon }
+    }
+    return g
+  })
+  if (changed) saveGroups(result)
+  return result
+}
+
 export function loadGroups(): AlarmGroup[] {
   const data = Storage.get<AlarmGroup[]>(STORAGE_KEYS.GROUPS, SHARED)
-  return data ?? DEFAULT_GROUPS
+  const groups = data ?? DEFAULT_GROUPS
+  return migrateGroupIcons(groups)
 }
 
 export function saveGroups(groups: AlarmGroup[]): void {
   Storage.set(STORAGE_KEYS.GROUPS, groups, SHARED)
+}
+
+export function addGroup(group: AlarmGroup): void {
+  const groups = loadGroups()
+  groups.push(group)
+  saveGroups(groups)
+}
+
+export function updateGroup(id: string, updates: Partial<AlarmGroup>): AlarmGroup | null {
+  const groups = loadGroups()
+  const idx = groups.findIndex((g) => g.id === id)
+  if (idx === -1) return null
+  groups[idx] = { ...groups[idx], ...updates }
+  saveGroups(groups)
+  return groups[idx]
+}
+
+export function removeGroup(id: string): void {
+  saveGroups(loadGroups().filter((g) => g.id !== id))
+}
+
+export function createGroup(partial: Partial<AlarmGroup>): AlarmGroup {
+  const groups = loadGroups()
+  return {
+    id: generateUUID(),
+    name: "新分类",
+    icon: "tag.fill",
+    tintColor: "#007AFF",
+    order: groups.length,
+    ...partial,
+  }
 }
 
 // ==================== 设置操作 ====================
@@ -106,7 +170,7 @@ export function createAlarmItem(partial: Partial<AlarmItem>): AlarmItem {
     gradualWake: false,
     preAlertSeconds: 300,
     sound: "default",
-    groupName: "上班",
+    groupName: "",
     tag: "",
     note: "",
     tintColor: "systemBlue",

@@ -125,7 +125,7 @@ export interface AppSettings {
 export const DEFAULT_GROUPS: AlarmGroup[] = [
   { id: "g-work", name: "上班", icon: "briefcase.fill", tintColor: "systemBlue", order: 0 },
   { id: "g-school", name: "上学", icon: "book.fill", tintColor: "systemTeal", order: 1 },
-  { id: "g-training", name: "培训班", icon: "figure.run.fill", tintColor: "systemPurple", order: 2 },
+  { id: "g-training", name: "培训班", icon: "graduationcap.fill", tintColor: "systemPurple", order: 2 },
   { id: "g-credit", name: "信用卡", icon: "creditcard.fill", tintColor: "systemOrange", order: 3 },
   { id: "g-anniversary", name: "纪念日", icon: "heart.fill", tintColor: "systemPink", order: 4 },
   { id: "g-other", name: "其他", icon: "ellipsis.circle", tintColor: "systemGray", order: 5 },

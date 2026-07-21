@@ -40,7 +40,7 @@ export function AddAlarm({ editId }: AddAlarmProps) {
   const groups = loadGroups()
 
   const title = useObservable(existing?.title ?? "新闹钟")
-  const groupName = useObservable(existing?.groupName ?? "上班")
+  const groupName = useObservable(existing?.groupName ?? "")
   const tag = useObservable(existing?.tag ?? "")
   const note = useObservable(existing?.note ?? "")
   const tintColor = useObservable(existing?.tintColor ?? "systemBlue")
@@ -97,7 +97,6 @@ export function AddAlarm({ editId }: AddAlarmProps) {
     dismiss({ saved: true })
   }
 
-  const groupLabels = groups.map((g) => g.name)
   const colorLabels = COLOR_OPTIONS.map((c) => c.label)
 
   return (
@@ -142,7 +141,9 @@ export function AddAlarm({ editId }: AddAlarmProps) {
             title="分组"
             value={groupName}
           >
-            {groupLabels.map((label) => <Text key={label} tag={label}>{label}</Text>)}
+            {/* 无分类对应空串，其余对应分类名 */}
+            <Text key="none" tag="">无分类</Text>
+            {groups.map((g) => <Text key={g.id} tag={g.name}>{g.name}</Text>)}
           </Picker>
           <TextField title="标签" value={tag} prompt="可选标签" />
           <TextField title="备注" value={note} prompt="可选备注" />
