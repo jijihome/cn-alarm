@@ -114,7 +114,6 @@ export interface HolidayCalendar {
 
 export interface AppSettings {
   activeTemplate: string | null
-  holidayAutoSkip: boolean
   defaultGradualWake: boolean
   defaultPreAlert: number
   defaultSound: string
@@ -134,7 +133,6 @@ export const DEFAULT_GROUPS: AlarmGroup[] = [
 // ==================== 默认设置 ====================
 export const DEFAULT_SETTINGS: AppSettings = {
   activeTemplate: null,
-  holidayAutoSkip: true,
   defaultGradualWake: false,
   defaultPreAlert: 300,
   defaultSound: "default",

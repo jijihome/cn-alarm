@@ -36,7 +36,7 @@ export function Settings() {
     <NavigationStack>
       <List navigationTitle="设置">
         {/* 调休日历 */}
-        <Section header={<Text>调休日历</Text>} footer={<Text>开启后，法定节假日当天的重复闹钟将自动跳过，调休补班日会补响</Text>}>
+        <Section header={<Text>调休日历</Text>} footer={<Text>在闹钟的重复设置中选择调休动作（跳过/顺延），法定节假日当天自动处理</Text>}>
           <NavigationLink destination={<HolidayEditor />}>
             <HStack alignment="center">
               <Text>节假日安排</Text>
@@ -44,11 +44,6 @@ export function Settings() {
               <Text foregroundStyle="secondaryLabel">{holidayCount}假 {workdayCount}补</Text>
             </HStack>
           </NavigationLink>
-          <Toggle
-            title="节假日自动跳过闹钟"
-            value={settings.value.holidayAutoSkip ? true : false}
-            onChanged={(v: boolean) => updateSetting({ holidayAutoSkip: v })}
-          />
         </Section>
 
         {/* 默认设置 */}
