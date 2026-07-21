@@ -1,10 +1,10 @@
 // RepeatSettings.tsx - 重复模式设置
 // 交互设计：
-//   1. "模式" 行 → sheet 弹出单选列表，选中后自动关闭返回上级
+//   1. "模式" 行 → NavigationLink push 到模式选择页（原生右箭头指示）
 //   2. "设置" 行 → NavigationLink push 到当前模式的专属设置页
 // 响应式：所有显示直接读 rule.value（props Observable），rule.setValue 触发
 //        AddAlarm 重渲染 → RepeatSettings 作为子组件重渲染 → 显示自动更新
-import { useState, Text, List, Section, NavigationLink, NavigationStack, Button, HStack, Spacer } from "scripting"
+import { Text, List, Section, NavigationLink, NavigationStack, Button, Navigation, HStack, Spacer } from "scripting"
 import { RepeatMode, RepeatRule } from "../../lib/constants"
 import { formatRepeatDescription } from "../../lib/scheduler"
 
@@ -57,32 +57,15 @@ export function RepeatSettings({ rule }: RepeatSettingsProps) {
     }
   })()
 
-  // 模式选择 sheet 的显示状态
-  const [modePickerShown, setModePickerShown] = useState(false)
-
   return (
     <Section header={<Text>重复</Text>}>
-      <Button
-        action={() => setModePickerShown(true)}
-        sheet={{
-          isPresented: modePickerShown,
-          onChanged: setModePickerShown,
-          content: (
-            <NavigationStack>
-              <RepeatModePickerPage
-                rule={rule}
-                onSelected={() => setModePickerShown(false)}
-              />
-            </NavigationStack>
-          ),
-        }}
-      >
+      <NavigationLink destination={<RepeatModePickerPage rule={rule} />}>
         <HStack alignment="center">
           <Text>模式</Text>
           <Spacer />
           <Text foregroundStyle="secondaryLabel">{currentLabel}</Text>
         </HStack>
-      </Button>
+      </NavigationLink>
       <NavigationLink
         destination={settingsDestination}
       >
@@ -96,10 +79,11 @@ export function RepeatSettings({ rule }: RepeatSettingsProps) {
   )
 }
 
-// ==================== 模式选择页（单选列表，sheet 弹出） ====================
-function RepeatModePickerPage({ rule, onSelected }: { rule: Observable<RepeatRule>; onSelected: () => void }) {
+// ==================== 模式选择页（单选列表，push 进入） ====================
+function RepeatModePickerPage({ rule }: { rule: Observable<RepeatRule> }) {
+  const dismiss = Navigation.useDismiss()
   // 直接读 rule.value.mode：rule.setValue 触发 AddAlarm 重渲染，
-  // sheet content 随之重渲染，✓ 标记自动更新
+  // push 进来的页面随父级重渲染，✓ 标记自动更新
   const selectMode = (mode: RepeatMode) => {
     if (mode === rule.value.mode) return
     const newRule: RepeatRule = {
@@ -133,7 +117,7 @@ function RepeatModePickerPage({ rule, onSelected }: { rule: Observable<RepeatRul
       newRule.anchorDate = rule.value.anchorDate ?? new Date().toISOString().slice(0, 10)
     }
     rule.setValue(newRule)
-    onSelected() // 选完自动关闭 sheet 返回上级
+    dismiss() // 选完自动返回上一级
   }
 
   return (
