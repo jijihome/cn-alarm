@@ -1,5 +1,5 @@
 // AddAlarm.tsx - 添加/编辑闹钟页
-import { useObservable, useState, NavigationStack, List, Section, Text, DatePicker, Toggle, Picker, TextField, Button, Navigation, HStack, Spacer } from "scripting"
+import { useObservable, useState, NavigationStack, List, Section, Text, DatePicker, Toggle, Picker, TextField, Button, Stepper, Navigation, HStack, Spacer } from "scripting"
 
 import { AlarmItem, RepeatRule } from "../lib/constants"
 import { createAlarmItem, addAlarm, updateAlarm, getAlarmById, loadGroups, loadSettings } from "../lib/alarm-store"
@@ -16,9 +16,6 @@ const COLOR_OPTIONS = [
   { label: "红", value: "systemRed" },
   { label: "粉", value: "systemPink" },
 ]
-
-const PRESET_PRE_ALERTS = [300, 600, 900, 1800]
-const PRESET_PRE_ALERT_LABELS = ["5分钟", "10分钟", "15分钟", "30分钟"]
 
 const DEFAULT_REPEAT_RULE: RepeatRule = {
   mode: "weekly",
@@ -58,11 +55,8 @@ export function AddAlarm({ editId }: AddAlarmProps) {
   // 重复规则：RepeatSettings 自管状态，通过 rule Observable 读最新值
   const repeatRule = useObservable<RepeatRule>(existing?.repeat ?? DEFAULT_REPEAT_RULE)
 
-  // 提前提醒
-  const initialPreAlertIdx = existing
-    ? PRESET_PRE_ALERTS.indexOf(existing.preAlertSeconds)
-    : PRESET_PRE_ALERTS.indexOf(defaults?.defaultPreAlert ?? 300)
-  const preAlertIdx = useObservable(initialPreAlertIdx >= 0 ? initialPreAlertIdx : 0)
+  // 提前提醒（秒）
+  const preAlertSeconds = useObservable(existing?.preAlertSeconds ?? defaults?.defaultPreAlert ?? 300)
 
   const handleSave = () => {
     if (!title.value.trim()) {
@@ -77,7 +71,7 @@ export function AddAlarm({ editId }: AddAlarmProps) {
       minute: timeValue.value.getMinutes(),
       repeat: repeatRule.value,
       gradualWake: gradualWake.value,
-      preAlertSeconds: PRESET_PRE_ALERTS[preAlertIdx.value],
+      preAlertSeconds: preAlertSeconds.value,
       groupName: groupName.value,
       tag: tag.value,
       note: note.value,
@@ -127,12 +121,16 @@ export function AddAlarm({ editId }: AddAlarmProps) {
         <Section header={<Text>提醒方式</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">开启后，在正式响铃前先发一次轻提醒，逐步唤醒，避免被突然的大音量吓醒</Text>}>
           <Toggle title="渐进唤醒" value={gradualWake} />
           {gradualWake.value && (
-            <Picker
-              title="轻提醒提前量"
-              value={preAlertIdx as any}
+            <Stepper
+              onIncrement={() => preAlertSeconds.setValue(preAlertSeconds.value + 60)}
+              onDecrement={() => preAlertSeconds.setValue(Math.max(60, preAlertSeconds.value - 60))}
             >
-              {PRESET_PRE_ALERT_LABELS.map((label, idx) => <Text key={label} tag={idx}>{label}</Text>)}
-            </Picker>
+              <HStack alignment="center">
+                <Text>轻提醒提前</Text>
+                <Spacer />
+                <Text foregroundStyle="secondaryLabel">{Math.floor(preAlertSeconds.value / 60)} 分钟</Text>
+              </HStack>
+            </Stepper>
           )}
         </Section>
 

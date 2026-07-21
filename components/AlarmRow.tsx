@@ -1,6 +1,6 @@
 // AlarmRow.tsx - 闹钟列表行组件
 import { useState } from "scripting"
-import { Button, HStack, VStack, Text, Toggle, Circle } from "scripting"
+import { HStack, VStack, Text, Toggle, Circle } from "scripting"
 import { AlarmItem } from "../lib/constants"
 import { formatRepeatDescription } from "../lib/scheduler"
 
@@ -26,8 +26,11 @@ export function AlarmRow({ alarm, onToggle, onEdit }: AlarmRowProps) {
   }
 
   return (
-    <Button action={() => onEdit(alarm.id)}>
-      <HStack alignment="center" spacing={12}>
+    <Toggle
+      value={alarm.enabled}
+      onChanged={handleToggle}
+    >
+      <HStack alignment="center" spacing={12} onTapGesture={() => onEdit(alarm.id)}>
         <Circle fill={alarm.tintColor as any} frame={{ width: 8, height: 8 }} />
         <VStack alignment="leading" spacing={2}>
           <HStack alignment="firstTextBaseline" spacing={8}>
@@ -39,12 +42,7 @@ export function AlarmRow({ alarm, onToggle, onEdit }: AlarmRowProps) {
             {alarm.tag ? ` · ${alarm.tag}` : ""}
           </Text>
         </VStack>
-        <Toggle
-          title="启用"
-          value={alarm.enabled}
-          onChanged={handleToggle}
-        />
       </HStack>
-    </Button>
+    </Toggle>
   )
 }

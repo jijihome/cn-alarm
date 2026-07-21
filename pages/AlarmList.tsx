@@ -90,32 +90,37 @@ export function AlarmList() {
   const handleAdd = () => presentEditor()
   const handleEdit = (id: string) => presentEditor(id)
 
-  const handleToggle = async (id: string, enabled: boolean) => {
+  const handleToggle = (id: string, enabled: boolean) => {
     const alarm = alarms.value.find((a) => a.id === id)
     if (!alarm) return
 
     if (enabled) {
-      // 启用：创建系统闹钟
-      const alarmId = await scheduleAlarm(alarm)
-      if (alarmId) {
-        updateAlarm(id, { enabled: true, alarmIds: [...alarm.alarmIds, alarmId] })
-        setToastMsg("闹钟已启用")
-        setToastShown(true)
-      } else {
-        setToastMsg("系统提醒创建失败，闹钟未启用")
-        setToastShown(true)
-      }
+      // 启用：先立即更新本地状态，再异步创建系统闹钟
+      updateAlarm(id, { enabled: true, alarmIds: [] })
+      alarms.setValue(loadAlarms())
+      scheduleAlarm(alarm).then((alarmId: string | null) => {
+        if (alarmId) {
+          updateAlarm(id, { alarmIds: [alarmId] })
+          setToastMsg("闹钟已启用")
+          setToastShown(true)
+        } else {
+          // 系统提醒创建失败，回滚启用状态
+          updateAlarm(id, { enabled: false })
+          setToastMsg("系统提醒创建失败，闹钟未启用")
+          setToastShown(true)
+        }
+        alarms.setValue(loadAlarms())
+      })
     } else {
-      // 停用：取消所有系统闹钟
-      for (const aid of alarm.alarmIds) {
-        await cancelAlarm(aid)
-      }
+      // 停用：先立即更新本地状态，再异步取消系统闹钟
+      const oldAlarmIds = [...alarm.alarmIds]
       updateAlarm(id, { enabled: false, alarmIds: [] })
+      alarms.setValue(loadAlarms())
       setToastMsg("闹钟已停用")
       setToastShown(true)
+      // 异步取消系统闹钟（fire-and-forget，失败不影响本地状态）
+      Promise.all(oldAlarmIds.map((aid: string) => cancelAlarm(aid))).catch(() => {})
     }
-
-    alarms.setValue(loadAlarms())
   }
 
   return (
