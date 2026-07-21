@@ -1,0 +1,162 @@
+// AddCreditCard.tsx - 添加/编辑信用卡页
+import { useObservable, NavigationStack, List, Section, Text, Picker, TextField, Button, Toggle, Stepper, HStack, VStack, Navigation, useState } from "scripting"
+import { CreditCard, BANK_PRESETS } from "../lib/constants"
+import { createCard, updateCard, syncCardAlarms, getCardById, deleteCard } from "../lib/credit-card"
+
+declare function alert(options: { title?: string; message: string }): Promise<void>
+
+const COLOR_OPTIONS = [
+  { label: "橙", value: "systemOrange" },
+  { label: "蓝", value: "systemBlue" },
+  { label: "红", value: "systemRed" },
+  { label: "绿", value: "systemGreen" },
+  { label: "紫", value: "systemPurple" },
+]
+
+interface AddCreditCardProps {
+  editId?: string
+  onSave?: () => void
+  onCancel?: () => void
+}
+
+export function AddCreditCard({ editId }: AddCreditCardProps) {
+  const dismiss = Navigation.useDismiss()
+  const existing = editId ? getCardById(editId) : null
+
+  // 删除确认对话框状态
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  const bankName = useObservable(existing?.bankName ?? "招商银行")
+  const last4Digits = useObservable(existing?.last4Digits ?? "")
+  const statementDay = useObservable(existing?.statementDay ?? 5)
+  const graceDays = useObservable(existing?.graceDays ?? 18)
+  const bufferDays = useObservable(existing?.bufferDays ?? 3)
+  const remindDaysBefore = useObservable(existing?.remindDaysBefore ?? 3)
+  const tintColor = useObservable(existing?.tintColor ?? "systemOrange")
+
+  const bankLabels = BANK_PRESETS.map((b) => b.name)
+
+  const handleSave = async () => {
+    if (!last4Digits.value.trim() || last4Digits.value.length !== 4) {
+      await alert({ title: "提示", message: "请输入4位卡号尾号" })
+      return
+    }
+
+    // 根据银行名自动设置 graceDays（如果是预设银行且用户未改）
+    const preset = BANK_PRESETS.find((b) => b.name === bankName.value)
+    const finalGraceDays = preset && !existing ? preset.graceDays : graceDays.value
+
+    const cardData: Partial<CreditCard> = {
+      bankName: bankName.value,
+      last4Digits: last4Digits.value,
+      statementDay: statementDay.value,
+      graceDays: finalGraceDays,
+      bufferDays: bufferDays.value,
+      remindDaysBefore: remindDaysBefore.value,
+      tintColor: tintColor.value,
+    }
+
+    if (editId && existing) {
+      await syncCardAlarms({ ...existing, ...cardData } as CreditCard)
+      updateCard(editId, cardData)
+    } else {
+      await createCard(cardData)
+    }
+    dismiss({ saved: true })
+  }
+
+  const handleDelete = async () => {
+    if (!editId) return
+    // 先关闭确认框，再执行删除
+    setShowDeleteConfirm(false)
+    await deleteCard(editId)
+    dismiss({ saved: true })
+  }
+
+  return (
+    <NavigationStack>
+      <List
+        navigationTitle={editId ? "编辑信用卡" : "添加信用卡"}
+        navigationBarTitleDisplayMode="inline"
+        toolbar={{
+          topBarLeading: <Button title="取消" action={() => dismiss({ saved: false })} />,
+          topBarTrailing: <Button title="保存" action={handleSave} />,
+        }}
+        confirmationDialog={{
+          title: "删除信用卡",
+          titleVisibility: "visible",
+          message: <Text>确定删除「{existing?.bankName} 尾号{existing?.last4Digits}」吗？关联的闹钟也会被删除。</Text>,
+          isPresented: showDeleteConfirm,
+          onChanged: setShowDeleteConfirm,
+          actions: (
+            <>
+              <Button title="删除" role="destructive" action={handleDelete} />
+              <Button title="取消" role="cancel" action={() => setShowDeleteConfirm(false)} />
+            </>
+          ),
+        }}
+      >
+        <Section header={<Text>银行信息</Text>}>
+          <Picker title="银行" value={bankName}>
+            {bankLabels.map((label) => <Text key={label}>{label}</Text>)}
+          </Picker>
+          <TextField title="卡号尾4位" value={last4Digits} prompt="如 8888" />
+        </Section>
+
+        <Section header={<Text>日期设置</Text>}>
+          <HStack>
+            <Text>账单日</Text>
+            <Stepper
+              title="账单日"
+              onIncrement={() => statementDay.setValue(Math.min(31, statementDay.value + 1))}
+              onDecrement={() => statementDay.setValue(Math.max(1, statementDay.value - 1))}
+            />
+            <Text font={20} fontWeight="bold">{statementDay.value}号</Text>
+          </HStack>
+
+          <HStack>
+            <Text>账单到还款日</Text>
+            <Stepper
+              title="天数"
+              onIncrement={() => graceDays.setValue(Math.min(30, graceDays.value + 1))}
+              onDecrement={() => graceDays.setValue(Math.max(15, graceDays.value - 1))}
+            />
+            <Text font={20} fontWeight="bold">{graceDays.value}天</Text>
+          </HStack>
+
+          <HStack>
+            <Text>宽限期</Text>
+            <Stepper
+              title="宽限"
+              onIncrement={() => bufferDays.setValue(Math.min(7, bufferDays.value + 1))}
+              onDecrement={() => bufferDays.setValue(Math.max(0, bufferDays.value - 1))}
+            />
+            <Text font={20} fontWeight="bold">{bufferDays.value}天</Text>
+          </HStack>
+
+          <HStack>
+            <Text>提前提醒</Text>
+            <Stepper
+              title="提前"
+              onIncrement={() => remindDaysBefore.setValue(Math.min(10, remindDaysBefore.value + 1))}
+              onDecrement={() => remindDaysBefore.setValue(Math.max(1, remindDaysBefore.value - 1))}
+            />
+            <Text font={20} fontWeight="bold">{remindDaysBefore.value}天</Text>
+          </HStack>
+        </Section>
+
+        <Section header={<Text>外观</Text>}>
+          <Picker title="颜色" value={tintColor}>
+            {COLOR_OPTIONS.map((c) => <Text key={c.value}>{c.label}</Text>)}
+          </Picker>
+        </Section>
+
+        {!!editId && (
+          <Section>
+            <Button title="删除信用卡" tint="systemRed" action={() => setShowDeleteConfirm(true)} />
+          </Section>
+        )}
+      </List>
+    </NavigationStack>
+  )
+}

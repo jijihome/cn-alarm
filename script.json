@@ -1,0 +1,9 @@
+{
+  "name": "中国闹钟",
+  "icon": "alarm.fill",
+  "color": "rgba(255, 159, 10, 1)",
+  "version": "1.0.0",
+  "runInApp": true,
+  "localizedNames": { "zh": "中国闹钟" },
+  "description": "符合中国国情的个人闹钟管理程序 - 调休联动、信用卡还款日、农历/节气"
+}

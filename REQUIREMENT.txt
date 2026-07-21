@@ -1,0 +1,91 @@
+请继续开发「中国闹钟」项目。
+
+## 项目背景
+
+这是一个基于 Scripting app（iOS）的符合中国国情的个人闹钟管理程序。项目代码已完成 Phase 1-5 编码，TS 诊断零错误，但尚未在真机测试。以下是你需要知道的全部上下文。
+
+## 用户需求
+
+- 朝九晚五上班族自用
+- 场景：上班/上学/放学/下班/固定周期培训班、信用卡管理闹钟、农历纪念日、节气
+- 痛点：现有闹钟 app 不支持中国法定节假日调休（节假日该响不跳过、补班日该补响不补）、不好分类管理、没有多种周期（每几天/每几月/每几工作日等）、没有中国农历支持
+- 典型场景：周六固定培训班，但法定节假日要自动顺延（不响）；补班日（如周日调休上班）要自动补响
+- 信用卡：账单日+还款日提醒，自动计算跨月，支持宽限期和提前N天提醒
+
+## 项目文件位置
+
+- 脚本目录：`/var/mobile/Library/Mobile Documents/iCloud~com~thomfang~Scripting/Documents/scripts/中国闹钟/`
+- 交接文档（必读）：`/var/mobile/Containers/Shared/AppGroup/694F45C2-41B9-4F68-B720-0A0284ACA1E6/Documents/scripting-agent/workspace/default/alarm-design/HANDOVER.md`
+- 设计文档：同目录下 `01-设计规格.md` ~ `06-实现计划-Phase4-5信用卡与高级功能.md`
+
+## 已完成的 17 个文件
+
+```
+中国闹钟/
+├── script.json              — 脚本描述
+├── index.tsx                — 主入口 TabView（闹钟+信用卡+设置）
+├── lib/
+│   ├── constants.ts         — 常量+类型定义+默认调休数据+16家银行预设
+│   ├── alarm-bridge.ts      — Shell.run 桥接 ios-alarm skill
+│   ├── alarm-store.ts       — 闹钟 CRUD + Storage（shared:true）
+│   ├── holiday.ts           — 调休日历判断（isHoliday/shouldRing）
+│   ├── scheduler.ts         — 7种调度引擎（once/daily/weekly/monthly/yearly/lunar/workday）
+│   ├── lunar.ts             — 农历-公历转换（2020-2030数据表）
+│   ├── solar-term.ts        — 24节气计算（寿星公式）
+│   └── credit-card.ts       — 信用卡还款日计算+自动生成4类闹钟
+├── pages/
+│   ├── AlarmList.tsx        — 闹钟列表+下一闹钟倒计时卡片
+│   ├── AddAlarm.tsx         — 添加/编辑闹钟表单（7种重复+调休联动+渐进唤醒）
+│   ├── CreditCardList.tsx   — 信用卡列表
+│   ├── AddCreditCard.tsx    — 添加/编辑信用卡
+│   ├── Settings.tsx         — 设置页（调休开关+默认设置）
+│   └── HolidayEditor.tsx    — 调休日历查看/重置
+└── components/
+    ├── AlarmRow.tsx         — 闹钟列表行组件
+    └── WeekdayPicker.tsx    — 星期选择器组件
+```
+
+## 关键未完成项（⚠️ 优先处理）
+
+1. **AlarmList/CreditCardList 的添加/编辑入口未接通** — index.tsx 中 `onEditAlarm`/`onAddCard`/`onEditCard` 是空函数，需要接入 NavigationLink 跳转对应编辑页
+2. **Shell.run 桥接未真机测试** — alarm-bridge.ts 的 scheduleAlarm/cancelAlarm 还没验证是否能调通 ios-alarm skill
+3. **AddAlarm 中 Stepper 控件缺失** — interval/dayOfMonth/lunarMonth 等数值只显示 Text，没有实际可交互的增减控件
+4. **删除确认** — 左滑删除和信用卡删除应该用 confirmationDialog，当前用简化 alert
+
+## 运行时潜在问题
+
+1. AlarmManager 可能不可用（需检测 isAvailable）
+2. 农历数据表只覆盖 2020-2030
+3. 节气公式可能有 ±1天偏差
+
+## 关键技术决策
+
+1. 用 `Configuration.countdown` + schedule 替代 `Configuration.alarm()`（后者被 AlarmKit 拒绝）
+2. UI 脚本通过 `Shell.run` 调 ios-alarm skill（UI 脚本无法直接 import skill 目录的 .ts）
+3. 双层数据：Storage 存业务元数据，AlarmManager 存运行时闹钟，通过 alarmId 关联
+4. weekly + holidayAware：用 AlarmManager weekly schedule + App 启动时调休预告补丁
+5. monthly/yearly/lunar 模式：无法用 weekly，改为滚动创建一次性 fixed 闹钟
+
+## Scripting app API 注意事项
+
+- Picker 无 `Picker.Item`，用 children 放 Text 选项，`value: Observable<T>` 或 `value`+`onChanged`
+- Stepper 无 value/onChanged/range，只有 `onIncrement`/`onDecrement` 回调
+- TextField 无 placeholder，用 `prompt` 属性
+- `foregroundStyle` 用 `"secondaryLabel"` 不是 `"secondary"`
+- `fill`/`tintColor` 传字符串需 `as any` 绕过 TS 类型
+- `alert()` 是全局函数，不需导入，返回 Promise
+- DatePicker `value` 接受 `Observable<Date>` 或 `timestamp(number)`
+- `font` 属性接受 number 或预设名，`fontWeight` 单独设
+- ForEach `data` 需要 `{id: string}[]` 类型，无 id 的数据用 `.map()` 代替
+- `Storage.set/get` 跨进程必须传 `{ shared: true }`
+- scripting-ts 运行时对顶层 `async function` 声明有限制，必须用 IIFE `(async () => { ... })()`
+- Dialog.* 取消判断用 `== null`（松散等），不要用 `=== null`
+
+## 你现在该做什么
+
+1. 先读交接文档 `HANDOVER.md` 了解更多细节
+2. 在 Scripting app 中运行「中国闹钟」看 UI 是否正常显示
+3. 接通添加/编辑入口（最关键的未完成项）
+4. 测试 Shell.run 桥接是否能调通 ios-alarm skill
+5. 补全 Stepper 控件和删除确认
+6. 真机测试+修复问题
