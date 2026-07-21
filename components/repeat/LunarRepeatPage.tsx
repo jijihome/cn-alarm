@@ -47,14 +47,14 @@ export function LunarRepeatPage({ rule }: LunarRepeatPageProps) {
           value={lunarMonth as any}
           onChanged={() => { sync() }}
         >
-          {LUNAR_MONTH_LABELS.map((label, idx) => <Text key={idx}>{label}</Text>)}
+          {LUNAR_MONTH_LABELS.map((label, idx) => <Text key={idx} tag={idx + 1}>{label}</Text>)}
         </Picker>
         <Picker
           title="农历日"
           value={lunarDay as any}
           onChanged={() => { sync() }}
         >
-          {LUNAR_DAY_LABELS.map((label, idx) => <Text key={idx}>{label}</Text>)}
+          {LUNAR_DAY_LABELS.map((label, idx) => <Text key={idx} tag={idx + 1}>{label}</Text>)}
         </Picker>
       </Section>
       <Section>

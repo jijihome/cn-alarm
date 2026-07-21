@@ -1,5 +1,5 @@
 // WeeklyRepeatPage.tsx - 每周模式专属设置页
-import { useObservable, List, Section, Text, HStack, Stepper, Toggle } from "scripting"
+import { useObservable, List, Section, Text, Stepper, Toggle, HStack, Spacer } from "scripting"
 import { RepeatRule } from "../../lib/constants"
 import { WeekdayPicker } from "../WeekdayPicker"
 
@@ -48,16 +48,16 @@ export function WeeklyRepeatPage({ rule }: WeeklyRepeatPageProps) {
       </Section>
 
       <Section header={<Text>间隔</Text>}>
-        <HStack>
-          <Text>每</Text>
-          <Stepper
-            title="间隔"
-            onIncrement={() => { interval.setValue(Math.min(4, interval.value + 1)); sync() }}
-            onDecrement={() => { interval.setValue(Math.max(1, interval.value - 1)); sync() }}
-          />
-          <Text font={20} fontWeight="bold">{interval.value}</Text>
-          <Text foregroundStyle="secondaryLabel">{interval.value === 1 ? "每周" : "周"}</Text>
-        </HStack>
+        <Stepper
+          onIncrement={() => { interval.setValue(Math.min(4, interval.value + 1)); sync() }}
+          onDecrement={() => { interval.setValue(Math.max(1, interval.value - 1)); sync() }}
+        >
+          <HStack alignment="center">
+            <Text>间隔</Text>
+            <Spacer />
+            <Text foregroundStyle="secondaryLabel">每{interval.value}{interval.value === 1 ? "周" : "周"}</Text>
+          </HStack>
+        </Stepper>
       </Section>
 
       <Section header={<Text>智能调休</Text>}>

@@ -1,11 +1,18 @@
 // YearlyRepeatPage.tsx - 每年模式专属设置页
-import { useObservable, List, Section, Text, Picker } from "scripting"
-import { RepeatRule } from "../../lib/constants"
+// 支持4种子模式：按日期 / 按星期(某月第N周星期X) / 按节气 / 第N个工作日
+// 状态模式：useObservable + subscribe 监听变化触发 sync
+import { useObservable, useEffect, List, Section, Text, Picker } from "scripting"
+import { RepeatRule, YearlySubMode } from "../../lib/constants"
+import { WEEKDAY_LABELS } from "../../lib/constants"
 import { SOLAR_TERM_NAMES } from "../../lib/solar-term"
 
 const MONTH_LABELS = Array.from({ length: 12 }, (_, i) => `${i + 1}月`)
 const DAY_LABELS = Array.from({ length: 31 }, (_, i) => `${i + 1}号`)
-const SOLAR_TERM_OPTIONS = ["按日期", ...SOLAR_TERM_NAMES]
+const WEEK_OF_MONTH_LABELS = ["第一周", "第二周", "第三周", "第四周", "最后一周"]
+const WEEK_OF_MONTH_VALUES = [1, 2, 3, 4, -1]
+const WEEKDAY_PICKER_LABELS = WEEKDAY_LABELS.map((l) => `星期${l}`)
+const SUB_MODE_LABELS = ["按日期", "按星期", "按节气", "第N个工作日"]
+const SUB_MODE_VALUES: YearlySubMode[] = ["date", "weekday", "solarTerm", "nthWorkday"]
 
 interface YearlyRepeatPageProps {
   rule: Observable<RepeatRule>
@@ -13,71 +20,146 @@ interface YearlyRepeatPageProps {
 
 export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
   const init = rule.value
-  const initialSolarTermIdx = (() => {
+  const initialSubModeIdx = SUB_MODE_VALUES.indexOf((init.yearlySubMode ?? (init.solarTerm ? "solarTerm" : "date")) as YearlySubMode)
+  const subModeIdx = useObservable(initialSubModeIdx >= 0 ? initialSubModeIdx : 0)
+  const monthOfYear = useObservable(init.monthOfYear ?? 1)
+  const dayOfMonth = useObservable(init.dayOfMonth ?? 1)
+  const initialWeekIdx = WEEK_OF_MONTH_VALUES.indexOf(init.weekOfMonth ?? 1)
+  const weekOfMonthIdx = useObservable(initialWeekIdx >= 0 ? initialWeekIdx : 0)
+  const weekdayOfMonth = useObservable(init.weekdayOfMonth ?? 2)
+  const initialSolarIdx = (() => {
     if (init.solarTerm) {
       const idx = SOLAR_TERM_NAMES.indexOf(init.solarTerm)
-      return idx >= 0 ? idx + 1 : 0
+      if (idx >= 0) return idx
     }
     return 0
   })()
-  const solarTermIdx = useObservable(initialSolarTermIdx)
-  const monthOfYear = useObservable(init.monthOfYear ?? 1)
-  const dayOfMonth = useObservable(init.dayOfMonth ?? 1)
+  const solarTermIdx = useObservable(initialSolarIdx)
+  const nthWorkday = useObservable(init.nthWorkdayOfYear ?? 1)
 
   const sync = () => {
+    const subMode = SUB_MODE_VALUES[subModeIdx.value]
     const newRule: RepeatRule = {
       mode: "yearly",
       interval: 1,
+      yearlySubMode: subMode,
       holidayAware: false,
     }
-    if (solarTermIdx.value > 0) {
-      newRule.solarTerm = SOLAR_TERM_NAMES[solarTermIdx.value - 1]
-    } else {
+    if (subMode === "date") {
       newRule.monthOfYear = monthOfYear.value
       newRule.dayOfMonth = dayOfMonth.value
+    } else if (subMode === "weekday") {
+      newRule.monthOfYear = monthOfYear.value
+      newRule.weekOfMonth = WEEK_OF_MONTH_VALUES[weekOfMonthIdx.value]
+      newRule.weekdayOfMonth = weekdayOfMonth.value
+    } else if (subMode === "solarTerm") {
+      if (solarTermIdx.value >= 0 && solarTermIdx.value < SOLAR_TERM_NAMES.length) {
+        newRule.solarTerm = SOLAR_TERM_NAMES[solarTermIdx.value]
+      }
+    } else if (subMode === "nthWorkday") {
+      newRule.nthWorkdayOfYear = nthWorkday.value
     }
     rule.setValue(newRule)
   }
 
-  const isSolarTerm = solarTermIdx.value > 0
+  useEffect(() => {
+    const onLocalChange = () => { sync() }
+    subModeIdx.subscribe(onLocalChange)
+    monthOfYear.subscribe(onLocalChange)
+    dayOfMonth.subscribe(onLocalChange)
+    weekOfMonthIdx.subscribe(onLocalChange)
+    weekdayOfMonth.subscribe(onLocalChange)
+    solarTermIdx.subscribe(onLocalChange)
+    nthWorkday.subscribe(onLocalChange)
+    return () => {
+      subModeIdx.unsubscribe(onLocalChange)
+      monthOfYear.unsubscribe(onLocalChange)
+      dayOfMonth.unsubscribe(onLocalChange)
+      weekOfMonthIdx.unsubscribe(onLocalChange)
+      weekdayOfMonth.unsubscribe(onLocalChange)
+      solarTermIdx.unsubscribe(onLocalChange)
+      nthWorkday.unsubscribe(onLocalChange)
+    }
+  }, [])
+
+  const subMode = SUB_MODE_VALUES[subModeIdx.value]
 
   return (
     <List navigationTitle="每年" navigationBarTitleDisplayMode="inline">
-      <Section header={<Text>按节气或日期</Text>}>
+      <Section header={<Text>选择方式</Text>}>
         <Picker
-          title="选择方式"
-          value={solarTermIdx as any}
-          onChanged={() => { sync() }}
+          title="方式"
+          value={subModeIdx as any}
         >
-          {SOLAR_TERM_OPTIONS.map((label, idx) => <Text key={idx}>{label}</Text>)}
+          {SUB_MODE_LABELS.map((label, idx) => <Text key={idx} tag={idx}>{label}</Text>)}
         </Picker>
       </Section>
 
-      {isSolarTerm ? (
-        <Section header={<Text>节气提醒</Text>}>
-          <Text font={16} fontWeight="bold">
-            {SOLAR_TERM_NAMES[solarTermIdx.value - 1]}
-          </Text>
-          <Text foregroundStyle="secondaryLabel">
-            每年「{SOLAR_TERM_NAMES[solarTermIdx.value - 1]}」当天提醒
-          </Text>
-        </Section>
-      ) : (
+      {subMode === "date" && (
         <Section header={<Text>公历日期</Text>}>
           <Picker
             title="月份"
             value={monthOfYear as any}
-            onChanged={() => { sync() }}
           >
-            {MONTH_LABELS.map((label, idx) => <Text key={idx}>{label}</Text>)}
+            {MONTH_LABELS.map((label, idx) => <Text key={idx} tag={idx + 1}>{label}</Text>)}
           </Picker>
           <Picker
             title="日期"
             value={dayOfMonth as any}
-            onChanged={() => { sync() }}
           >
-            {DAY_LABELS.map((label, idx) => <Text key={idx}>{label}</Text>)}
+            {DAY_LABELS.map((label, idx) => <Text key={idx} tag={idx + 1}>{label}</Text>)}
           </Picker>
+        </Section>
+      )}
+
+      {subMode === "weekday" && (
+        <Section header={<Text>某月第N周星期X</Text>}>
+          <Picker
+            title="月份"
+            value={monthOfYear as any}
+          >
+            {MONTH_LABELS.map((label, idx) => <Text key={idx} tag={idx + 1}>{label}</Text>)}
+          </Picker>
+          <Picker
+            title="第几周"
+            value={weekOfMonthIdx as any}
+          >
+            {WEEK_OF_MONTH_LABELS.map((label, idx) => <Text key={idx} tag={WEEK_OF_MONTH_VALUES[idx]}>{label}</Text>)}
+          </Picker>
+          <Picker
+            title="星期几"
+            value={weekdayOfMonth as any}
+          >
+            {WEEKDAY_PICKER_LABELS.map((label, idx) => <Text key={idx} tag={idx + 1}>{label}</Text>)}
+          </Picker>
+        </Section>
+      )}
+
+      {subMode === "solarTerm" && (
+        <Section header={<Text>节气</Text>}>
+          <Picker
+            title="节气"
+            value={solarTermIdx as any}
+          >
+            {SOLAR_TERM_NAMES.map((label, idx) => <Text key={idx} tag={idx}>{label}</Text>)}
+          </Picker>
+          <Text foregroundStyle="secondaryLabel">
+            每年「{SOLAR_TERM_NAMES[solarTermIdx.value]}」当天提醒
+          </Text>
+        </Section>
+      )}
+
+      {subMode === "nthWorkday" && (
+        <Section header={<Text>第N个工作日</Text>}>
+          <Picker
+            title="第几个"
+            value={nthWorkday as any}
+          >
+            {Array.from({ length: 260 }, (_, i) => <Text key={i} tag={i + 1}>{i + 1}</Text>)}
+          </Picker>
+          <Text foregroundStyle="secondaryLabel">
+            每年第{nthWorkday.value}个工作日提醒
+          </Text>
         </Section>
       )}
     </List>

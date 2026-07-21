@@ -1,5 +1,5 @@
 // AddCreditCard.tsx - 添加/编辑信用卡页
-import { useObservable, NavigationStack, List, Section, Text, Picker, TextField, Button, Toggle, Stepper, HStack, VStack, Navigation, useState } from "scripting"
+import { useObservable, NavigationStack, List, Section, Text, Picker, TextField, Button, Stepper, Navigation, useState, HStack, Spacer } from "scripting"
 import { CreditCard, BANK_PRESETS } from "../lib/constants"
 import { createCard, updateCard, syncCardAlarms, getCardById, deleteCard } from "../lib/credit-card"
 
@@ -97,57 +97,64 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
         }}
       >
         <Section header={<Text>银行信息</Text>}>
-          <Picker title="银行" value={bankName}>
-            {bankLabels.map((label) => <Text key={label}>{label}</Text>)}
+          <Picker
+            title="银行"
+            value={bankName}
+          >
+            {bankLabels.map((label) => <Text key={label} tag={label}>{label}</Text>)}
           </Picker>
           <TextField title="卡号尾4位" value={last4Digits} prompt="如 8888" />
         </Section>
 
         <Section header={<Text>日期设置</Text>}>
-          <HStack>
-            <Text>账单日</Text>
-            <Stepper
-              title="账单日"
-              onIncrement={() => statementDay.setValue(Math.min(31, statementDay.value + 1))}
-              onDecrement={() => statementDay.setValue(Math.max(1, statementDay.value - 1))}
-            />
-            <Text font={20} fontWeight="bold">{statementDay.value}号</Text>
-          </HStack>
-
-          <HStack>
-            <Text>账单到还款日</Text>
-            <Stepper
-              title="天数"
-              onIncrement={() => graceDays.setValue(Math.min(30, graceDays.value + 1))}
-              onDecrement={() => graceDays.setValue(Math.max(15, graceDays.value - 1))}
-            />
-            <Text font={20} fontWeight="bold">{graceDays.value}天</Text>
-          </HStack>
-
-          <HStack>
-            <Text>宽限期</Text>
-            <Stepper
-              title="宽限"
-              onIncrement={() => bufferDays.setValue(Math.min(7, bufferDays.value + 1))}
-              onDecrement={() => bufferDays.setValue(Math.max(0, bufferDays.value - 1))}
-            />
-            <Text font={20} fontWeight="bold">{bufferDays.value}天</Text>
-          </HStack>
-
-          <HStack>
-            <Text>提前提醒</Text>
-            <Stepper
-              title="提前"
-              onIncrement={() => remindDaysBefore.setValue(Math.min(10, remindDaysBefore.value + 1))}
-              onDecrement={() => remindDaysBefore.setValue(Math.max(1, remindDaysBefore.value - 1))}
-            />
-            <Text font={20} fontWeight="bold">{remindDaysBefore.value}天</Text>
-          </HStack>
+          <Stepper
+            onIncrement={() => statementDay.setValue(Math.min(31, statementDay.value + 1))}
+            onDecrement={() => statementDay.setValue(Math.max(1, statementDay.value - 1))}
+          >
+            <HStack alignment="center">
+              <Text>账单日</Text>
+              <Spacer />
+              <Text foregroundStyle="secondaryLabel">{statementDay.value}号</Text>
+            </HStack>
+          </Stepper>
+          <Stepper
+            onIncrement={() => graceDays.setValue(Math.min(30, graceDays.value + 1))}
+            onDecrement={() => graceDays.setValue(Math.max(15, graceDays.value - 1))}
+          >
+            <HStack alignment="center">
+              <Text>账单到还款日</Text>
+              <Spacer />
+              <Text foregroundStyle="secondaryLabel">{graceDays.value}天</Text>
+            </HStack>
+          </Stepper>
+          <Stepper
+            onIncrement={() => bufferDays.setValue(Math.min(7, bufferDays.value + 1))}
+            onDecrement={() => bufferDays.setValue(Math.max(0, bufferDays.value - 1))}
+          >
+            <HStack alignment="center">
+              <Text>宽限期</Text>
+              <Spacer />
+              <Text foregroundStyle="secondaryLabel">{bufferDays.value}天</Text>
+            </HStack>
+          </Stepper>
+          <Stepper
+            onIncrement={() => remindDaysBefore.setValue(Math.min(10, remindDaysBefore.value + 1))}
+            onDecrement={() => remindDaysBefore.setValue(Math.max(1, remindDaysBefore.value - 1))}
+          >
+            <HStack alignment="center">
+              <Text>提前提醒</Text>
+              <Spacer />
+              <Text foregroundStyle="secondaryLabel">{remindDaysBefore.value}天</Text>
+            </HStack>
+          </Stepper>
         </Section>
 
         <Section header={<Text>外观</Text>}>
-          <Picker title="颜色" value={tintColor}>
-            {COLOR_OPTIONS.map((c) => <Text key={c.value}>{c.label}</Text>)}
+          <Picker
+            title="颜色"
+            value={tintColor}
+          >
+            {COLOR_OPTIONS.map((c) => <Text key={c.value} tag={c.value}>{c.label}</Text>)}
           </Picker>
         </Section>
 

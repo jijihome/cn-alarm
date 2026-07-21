@@ -1,9 +1,14 @@
 // Settings.tsx - 设置页
-import { useObservable, NavigationStack, List, Section, Text, Toggle, Picker, Button, NavigationLink, ForEach } from "scripting"
+import { useObservable, NavigationStack, List, Section, Text, Toggle, Picker, Button, NavigationLink, HStack, Spacer } from "scripting"
 import { loadSettings, saveSettings } from "../lib/alarm-store"
 import { loadHolidays, resetYearToDefault } from "../lib/holiday"
 import { AppSettings, HolidayCalendar } from "../lib/constants"
 import { HolidayEditor } from "./HolidayEditor"
+
+const PRE_ALERT_OPTIONS = [300, 600, 900, 1800]
+const PRE_ALERT_LABELS = ["5分钟", "10分钟", "15分钟", "30分钟"]
+const REMIND_BEFORE_OPTIONS = [1, 2, 3, 5, 7]
+const REMIND_BEFORE_LABELS = ["1天", "2天", "3天", "5天", "7天"]
 
 export function Settings() {
   const settings = useObservable<AppSettings>(() => loadSettings())
@@ -30,18 +35,18 @@ export function Settings() {
       <List navigationTitle="设置">
         {/* 调休日历 */}
         <Section header={<Text>调休日历</Text>} footer={<Text>开启后，法定节假日当天的重复闹钟将自动跳过，调休补班日会补响</Text>}>
-          <NavigationLink
-            title="查看/编辑节假日安排"
-            destination={<HolidayEditor />}
-          />
+          <NavigationLink destination={<HolidayEditor />}>
+            <HStack alignment="center">
+              <Text>节假日安排</Text>
+              <Spacer />
+              <Text foregroundStyle="secondaryLabel">{holidayCount}假 {workdayCount}补</Text>
+            </HStack>
+          </NavigationLink>
           <Toggle
             title="节假日自动跳过闹钟"
             value={settings.value.holidayAutoSkip ? true : false}
             onChanged={(v: boolean) => updateSetting({ holidayAutoSkip: v })}
           />
-          <Text foregroundStyle="secondaryLabel">
-            {currentYear}年: {holidayCount}个节假日, {workdayCount}个补班日
-          </Text>
         </Section>
 
         {/* 默认设置 */}
@@ -51,12 +56,26 @@ export function Settings() {
             value={settings.value.defaultGradualWake ? true : false}
             onChanged={(v: boolean) => updateSetting({ defaultGradualWake: v })}
           />
-          <Text foregroundStyle="secondaryLabel">
-            默认提前提醒: {Math.floor(settings.value.defaultPreAlert / 60)}分钟
-          </Text>
-          <Text foregroundStyle="secondaryLabel">
-            信用卡默认提前: {settings.value.defaultRemindDaysBefore}天
-          </Text>
+          <Picker
+            title="默认提前提醒"
+            value={(() => {
+              const idx = PRE_ALERT_OPTIONS.indexOf(settings.value.defaultPreAlert)
+              return idx >= 0 ? idx : 0
+            })()}
+            onChanged={(idx: number) => updateSetting({ defaultPreAlert: PRE_ALERT_OPTIONS[idx] })}
+          >
+            {PRE_ALERT_LABELS.map((label, idx) => <Text key={label} tag={idx}>{label}</Text>)}
+          </Picker>
+          <Picker
+            title="信用卡默认提前"
+            value={(() => {
+              const idx = REMIND_BEFORE_OPTIONS.indexOf(settings.value.defaultRemindDaysBefore)
+              return idx >= 0 ? idx : 0
+            })()}
+            onChanged={(idx: number) => updateSetting({ defaultRemindDaysBefore: REMIND_BEFORE_OPTIONS[idx] })}
+          >
+            {REMIND_BEFORE_LABELS.map((label, idx) => <Text key={label} tag={idx}>{label}</Text>)}
+          </Picker>
         </Section>
 
         {/* 数据管理 */}

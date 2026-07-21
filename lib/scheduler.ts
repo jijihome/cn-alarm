@@ -101,21 +101,75 @@ function getNextWeekly(alarm: AlarmItem, now: Date): Date | null {
   return null
 }
 
+// ==================== 辅助：计算某月第N周的星期X ====================
+function getWeekdayOfMonth(year: number, month: number, weekOfMonth: number, weekday: number): Date | null {
+  // weekday: Apple numbering 1=Sun 2=Mon ... 7=Sat → JS getDay(): 0=Sun 1=Mon ... 6=Sat
+  const jsWeekday = weekday % 7
+
+  if (weekOfMonth > 0) {
+    // 正数：第1周=该月第一个星期X
+    const firstDay = new Date(year, month - 1, 1)
+    const firstDayOfWeek = firstDay.getDay()
+    const diff = (jsWeekday - firstDayOfWeek + 7) % 7
+    const day = 1 + diff + (weekOfMonth - 1) * 7
+    const daysInMonth = new Date(year, month, 0).getDate()
+    if (day > daysInMonth) return null
+    return new Date(year, month - 1, day)
+  } else {
+    // 负数：-1=倒数第一个（最后一个），-2=倒数第二个
+    const lastDay = new Date(year, month, 0) // 下月第0天=本月最后一天
+    const lastDayOfWeek = lastDay.getDay()
+    const diff = (lastDayOfWeek - jsWeekday + 7) % 7
+    const day = lastDay.getDate() - diff + (weekOfMonth + 1) * 7
+    if (day < 1) return null
+    return new Date(year, month - 1, day)
+  }
+}
+
+// ==================== 辅助：计算每年第N个工作日 ====================
+function getNthWorkdayOfYear(year: number, nthWorkday: number): Date | null {
+  let count = 0
+  const date = new Date(year, 0, 1) // 1月1日
+  while (date.getFullYear() === year) {
+    const dayOfWeek = date.getDay()
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+    if (!isWeekend || isWorkday(date)) {
+      if (isWeekend && !isWorkday(date)) {
+        // 周末且不是补班日 → 跳过
+        date.setDate(date.getDate() + 1)
+        continue
+      }
+      count++
+      if (count === nthWorkday) return new Date(date)
+    }
+    date.setDate(date.getDate() + 1)
+  }
+  return null
+}
+
 // ==================== monthly: 每N月 ====================
 function getNextMonthly(alarm: AlarmItem, now: Date): Date | null {
-  const dayOfMonth = alarm.repeat.dayOfMonth ?? 1
   const interval = alarm.repeat.interval || 1
+  const subMode = alarm.repeat.monthlySubMode ?? "day"
 
   let year = now.getFullYear()
   let month = now.getMonth() + 1
 
   for (let i = 0; i < 24; i++) {
-    const daysInMonth = new Date(year, month, 0).getDate()
-    const actualDay = Math.min(dayOfMonth, daysInMonth)
+    let candidate: Date | null = null
 
-    const candidate = new Date(year, month - 1, actualDay, alarm.hour, alarm.minute, 0, 0)
+    if (subMode === "weekday" && alarm.repeat.weekOfMonth && alarm.repeat.weekdayOfMonth) {
+      // 每月第N周的星期X
+      candidate = getWeekdayOfMonth(year, month, alarm.repeat.weekOfMonth, alarm.repeat.weekdayOfMonth)
+    } else {
+      // 每月第N号（默认）
+      const dayOfMonth = alarm.repeat.dayOfMonth ?? 1
+      const daysInMonth = new Date(year, month, 0).getDate()
+      const actualDay = Math.min(dayOfMonth, daysInMonth)
+      candidate = new Date(year, month - 1, actualDay)
+    }
 
-    if (candidate > now) {
+    if (candidate && candidate > now) {
       // 检查间隔
       if (interval > 1 && alarm.repeat.anchorDate) {
         const anchor = new Date(alarm.repeat.anchorDate)
@@ -126,6 +180,7 @@ function getNextMonthly(alarm: AlarmItem, now: Date): Date | null {
           continue
         }
       }
+      candidate.setHours(alarm.hour, alarm.minute, 0, 0)
       return candidate
     }
 
@@ -137,8 +192,10 @@ function getNextMonthly(alarm: AlarmItem, now: Date): Date | null {
 
 // ==================== yearly: 每年（含节气） ====================
 function getNextYearly(alarm: AlarmItem, now: Date): Date | null {
-  // 如果有节气配置
-  if (alarm.repeat.solarTerm) {
+  const subMode = alarm.repeat.yearlySubMode ?? (alarm.repeat.solarTerm ? "solarTerm" : "date")
+
+  // 节气
+  if (subMode === "solarTerm" && alarm.repeat.solarTerm) {
     const termDate = getNextSolarTerm(alarm.repeat.solarTerm, now)
     if (termDate) {
       termDate.setHours(alarm.hour, alarm.minute, 0, 0)
@@ -147,7 +204,35 @@ function getNextYearly(alarm: AlarmItem, now: Date): Date | null {
     return null
   }
 
-  // 普通每年重复
+  // 每年第N个工作日
+  if (subMode === "nthWorkday" && alarm.repeat.nthWorkdayOfYear) {
+    let year = now.getFullYear()
+    for (let i = 0; i < 3; i++) {
+      const candidate = getNthWorkdayOfYear(year, alarm.repeat.nthWorkdayOfYear)
+      if (candidate) {
+        candidate.setHours(alarm.hour, alarm.minute, 0, 0)
+        if (candidate > now) return candidate
+      }
+      year++
+    }
+    return null
+  }
+
+  // 每年某月的第N周星期X
+  if (subMode === "weekday" && alarm.repeat.monthOfYear && alarm.repeat.weekOfMonth && alarm.repeat.weekdayOfMonth) {
+    let year = now.getFullYear()
+    for (let i = 0; i < 3; i++) {
+      const candidate = getWeekdayOfMonth(year, alarm.repeat.monthOfYear, alarm.repeat.weekOfMonth, alarm.repeat.weekdayOfMonth)
+      if (candidate) {
+        candidate.setHours(alarm.hour, alarm.minute, 0, 0)
+        if (candidate > now) return candidate
+      }
+      year++
+    }
+    return null
+  }
+
+  // 普通每年重复（月+日）
   const monthOfYear = alarm.repeat.monthOfYear ?? 1
   const dayOfMonth = alarm.repeat.dayOfMonth ?? 1
   let year = now.getFullYear()
@@ -275,13 +360,26 @@ export function formatRepeatDescription(repeat: RepeatRule): string {
       return `${prefix}每周${labels}`
     }
 
-    case "monthly":
+    case "monthly": {
+      const subMode = repeat.monthlySubMode ?? "day"
+      if (subMode === "weekday" && repeat.weekOfMonth && repeat.weekdayOfMonth) {
+        const weekLabel = repeat.weekOfMonth === -1 ? "最后一" : `第${repeat.weekOfMonth}`
+        return `每月${weekLabel}周星期${weekdayLabels[repeat.weekdayOfMonth - 1]}`
+      }
       if (repeat.interval === 1) return `每月${repeat.dayOfMonth}号`
       return `每${repeat.interval}月 ${repeat.dayOfMonth}号`
+    }
 
-    case "yearly":
-      if (repeat.solarTerm) return `每年${repeat.solarTerm}`
+    case "yearly": {
+      const subMode = repeat.yearlySubMode ?? (repeat.solarTerm ? "solarTerm" : "date")
+      if (subMode === "solarTerm" && repeat.solarTerm) return `每年${repeat.solarTerm}`
+      if (subMode === "nthWorkday" && repeat.nthWorkdayOfYear) return `每年第${repeat.nthWorkdayOfYear}个工作日`
+      if (subMode === "weekday" && repeat.monthOfYear && repeat.weekOfMonth && repeat.weekdayOfMonth) {
+        const weekLabel = repeat.weekOfMonth === -1 ? "最后一" : `第${repeat.weekOfMonth}`
+        return `每年${repeat.monthOfYear}月${weekLabel}周星期${weekdayLabels[repeat.weekdayOfMonth - 1]}`
+      }
       return `每年${repeat.monthOfYear}月${repeat.dayOfMonth}号`
+    }
 
     case "lunar_yearly":
       return `农历每年${repeat.lunarMonth}月${repeat.lunarDay}`

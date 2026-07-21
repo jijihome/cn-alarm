@@ -1,5 +1,5 @@
 // DailyRepeatPage.tsx - 每天模式专属设置页
-import { useObservable, List, Section, Text, HStack, Stepper, Toggle } from "scripting"
+import { useObservable, List, Section, Text, Stepper, Toggle, HStack, Spacer } from "scripting"
 import { RepeatRule } from "../../lib/constants"
 
 interface DailyRepeatPageProps {
@@ -22,16 +22,16 @@ export function DailyRepeatPage({ rule }: DailyRepeatPageProps) {
   return (
     <List navigationTitle="每天" navigationBarTitleDisplayMode="inline">
       <Section header={<Text>间隔</Text>}>
-        <HStack>
-          <Text>每</Text>
-          <Stepper
-            title="间隔"
-            onIncrement={() => { interval.setValue(Math.min(30, interval.value + 1)); sync() }}
-            onDecrement={() => { interval.setValue(Math.max(1, interval.value - 1)); sync() }}
-          />
-          <Text font={20} fontWeight="bold">{interval.value}</Text>
-          <Text foregroundStyle="secondaryLabel">天</Text>
-        </HStack>
+        <Stepper
+          onIncrement={() => { interval.setValue(Math.min(30, interval.value + 1)); sync() }}
+          onDecrement={() => { interval.setValue(Math.max(1, interval.value - 1)); sync() }}
+        >
+          <HStack alignment="center">
+            <Text>间隔</Text>
+            <Spacer />
+            <Text foregroundStyle="secondaryLabel">每{interval.value}天</Text>
+          </HStack>
+        </Stepper>
       </Section>
 
       <Section header={<Text>智能调休</Text>}>

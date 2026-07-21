@@ -1,5 +1,5 @@
 // AddAlarm.tsx - 添加/编辑闹钟页
-import { useObservable, NavigationStack, List, Section, Text, DatePicker, Toggle, Picker, TextField, Button, Navigation } from "scripting"
+import { useObservable, NavigationStack, List, Section, Text, DatePicker, Toggle, Picker, TextField, Button, Navigation, HStack, Spacer } from "scripting"
 
 declare function alert(options: { title?: string; message: string }): Promise<void>
 import { AlarmItem, RepeatRule } from "../lib/constants"
@@ -127,24 +127,33 @@ export function AddAlarm({ editId }: AddAlarmProps) {
         <Section header={<Text>提醒方式</Text>}>
           <Toggle title="渐进唤醒" value={gradualWake} />
           {gradualWake.value && (
-            <Picker title="提前提醒" value={preAlertIdx as any}>
-              {PRESET_PRE_ALERT_LABELS.map((label) => <Text key={label}>{label}</Text>)}
+            <Picker
+              title="提前提醒"
+              value={preAlertIdx as any}
+            >
+              {PRESET_PRE_ALERT_LABELS.map((label, idx) => <Text key={label} tag={idx}>{label}</Text>)}
             </Picker>
           )}
         </Section>
 
         <Section header={<Text>信息</Text>}>
           <TextField title="标题" value={title} prompt="闹钟标题" />
-          <Picker title="分组" value={groupName}>
-            {groupLabels.map((label) => <Text key={label}>{label}</Text>)}
+          <Picker
+            title="分组"
+            value={groupName}
+          >
+            {groupLabels.map((label) => <Text key={label} tag={label}>{label}</Text>)}
           </Picker>
           <TextField title="标签" value={tag} prompt="可选标签" />
           <TextField title="备注" value={note} prompt="可选备注" />
         </Section>
 
         <Section header={<Text>外观</Text>}>
-          <Picker title="颜色" value={tintColor}>
-            {colorLabels.map((label) => <Text key={label}>{label}</Text>)}
+          <Picker
+            title="颜色"
+            value={tintColor}
+          >
+            {colorLabels.map((label, idx) => <Text key={label} tag={COLOR_OPTIONS[idx].value}>{label}</Text>)}
           </Picker>
         </Section>
       </List>

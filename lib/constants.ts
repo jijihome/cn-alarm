@@ -20,12 +20,25 @@ export const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"]
 // ==================== 数据类型定义 ====================
 export type RepeatMode = "once" | "daily" | "weekly" | "monthly" | "yearly" | "lunar_yearly" | "workday"
 
+/** 每月/每年的子模式：按日期 vs 按第N周星期X */
+export type MonthlySubMode = "day" | "weekday"
+export type YearlySubMode = "date" | "weekday" | "solarTerm" | "nthWorkday"
+
 export interface RepeatRule {
   mode: RepeatMode
   interval: number
   weekdays?: number[]
   dayOfMonth?: number
   monthOfYear?: number
+  /** 每月/每年子模式 */
+  monthlySubMode?: MonthlySubMode
+  yearlySubMode?: YearlySubMode
+  /** 每月/每年按星期X时：第几周（1=第一周, 2=第二周, ..., -1=最后一周） */
+  weekOfMonth?: number
+  /** 每月/每年按星期X时：星期几（Apple编号 1=日 2=一 ... 7=六） */
+  weekdayOfMonth?: number
+  /** 每年第N个工作日 */
+  nthWorkdayOfYear?: number
   lunarMonth?: number
   lunarDay?: number
   solarTerm?: string
