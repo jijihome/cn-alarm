@@ -44,6 +44,7 @@ export function Settings() {
               <Text foregroundStyle="secondaryLabel">{holidayCount}假 {workdayCount}补</Text>
             </HStack>
           </NavigationLink>
+          <Button title="重置为默认值" action={handleResetHolidays} />
         </Section>
 
         {/* 默认设置 */}
@@ -54,7 +55,7 @@ export function Settings() {
             onChanged={(v: boolean) => updateSetting({ defaultGradualWake: v })}
           />
           <Picker
-            title="默认提前提醒"
+            title="默认轻提醒提前量"
             value={(() => {
               const idx = PRE_ALERT_OPTIONS.indexOf(settings.value.defaultPreAlert)
               return idx >= 0 ? idx : 0
@@ -84,7 +85,6 @@ export function Settings() {
               <Text foregroundStyle="secondaryLabel">{groupCount} 个分类</Text>
             </HStack>
           </NavigationLink>
-          <Button title="重置调休日历为默认值" action={handleResetHolidays} />
           <Text font={13} foregroundStyle="secondaryLabel">中国闹钟 v1.0.0</Text>
         </Section>
       </List>

@@ -128,7 +128,7 @@ export function AddAlarm({ editId }: AddAlarmProps) {
           <Toggle title="渐进唤醒" value={gradualWake} />
           {gradualWake.value && (
             <Picker
-              title="提前提醒"
+              title="轻提醒提前量"
               value={preAlertIdx as any}
             >
               {PRESET_PRE_ALERT_LABELS.map((label, idx) => <Text key={label} tag={idx}>{label}</Text>)}
