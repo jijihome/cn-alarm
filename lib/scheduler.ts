@@ -84,15 +84,17 @@ function getNextWeekly(alarm: AlarmItem, now: Date): Date | null {
     // 调休联动判断
     if (alarm.repeat.holidayAware) {
       if (settings.holidayAutoSkip && isHoliday(candidate)) continue
-      if (isWorkday(candidate)) return candidate // 补班日强制响
     }
 
-    // interval > 1: 检查周间隔
+    // interval > 1: 检查周间隔（对所有日期统一执行，包括补班日）
     if (interval > 1 && alarm.repeat.anchorDate) {
       const anchor = new Date(alarm.repeat.anchorDate)
       const weekDiff = Math.floor((candidate.getTime() - anchor.getTime()) / (7 * 24 * 60 * 60 * 1000))
       if (weekDiff % interval !== 0) continue
     }
+
+    // 补班日强制响（在 interval 检查通过后）
+    if (alarm.repeat.holidayAware && isWorkday(candidate)) return candidate
 
     return candidate
   }

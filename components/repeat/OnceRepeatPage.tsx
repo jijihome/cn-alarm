@@ -1,0 +1,45 @@
+// OnceRepeatPage.tsx - 仅一次模式专属设置页
+import { useObservable, List, Section, Text, DatePicker } from "scripting"
+import { RepeatRule } from "../../lib/constants"
+
+interface OnceRepeatPageProps {
+  rule: Observable<RepeatRule>
+}
+
+export function OnceRepeatPage({ rule }: OnceRepeatPageProps) {
+  const init = rule.value
+  const anchorDate = useObservable(() => {
+    const d = new Date()
+    if (init.anchorDate) {
+      const parts = init.anchorDate.split("-")
+      d.setFullYear(+parts[0], +parts[1] - 1, +parts[2])
+    }
+    return d
+  })
+
+  const handleDateChange = () => {
+    rule.setValue({
+      ...rule.value,
+      mode: "once",
+      anchorDate: anchorDate.value.toISOString().slice(0, 10),
+    })
+  }
+
+  return (
+    <List navigationTitle="仅一次" navigationBarTitleDisplayMode="inline">
+      <Section header={<Text>选择日期</Text>}>
+        <DatePicker
+          title="闹钟日期"
+          displayedComponents={["date"]}
+          value={anchorDate}
+          datePickerStyle="wheel"
+        />
+      </Section>
+      <Section>
+        <Text foregroundStyle="tertiaryLabel">
+          闹钟将在选定日期响一次后自动关闭
+        </Text>
+      </Section>
+    </List>
+  )
+}
