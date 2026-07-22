@@ -445,8 +445,13 @@ export function formatRepeatDescription(repeat: RepeatRule): string {
   const weekdayLabels = ["日", "一", "二", "三", "四", "五", "六"]
 
   switch (repeat.mode) {
-    case "once":
+    case "once": {
+      if (repeat.anchorDate) {
+        const parts = repeat.anchorDate.split("-")
+        return `${+parts[0]}年${+parts[1]}月${+parts[2]}日`
+      }
       return "仅一次"
+    }
 
     case "daily": {
       const base = repeat.interval === 1 ? "每天" : `每${repeat.interval}天`

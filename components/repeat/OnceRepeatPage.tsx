@@ -1,5 +1,5 @@
 // OnceRepeatPage.tsx - 仅一次模式专属设置页
-import { useObservable, List, Section, Text, DatePicker } from "scripting"
+import { useObservable, useEffect, List, Section, Text, DatePicker } from "scripting"
 import { RepeatRule } from "../../lib/constants"
 
 interface OnceRepeatPageProps {
@@ -17,13 +17,19 @@ export function OnceRepeatPage({ rule }: OnceRepeatPageProps) {
     return d
   })
 
-  const handleDateChange = () => {
-    rule.setValue({
-      ...rule.value,
-      mode: "once",
-      anchorDate: anchorDate.value.toISOString().slice(0, 10),
-    })
-  }
+  // DatePicker 自动双向绑定 anchorDate Observable
+  // 用 useEffect 监听变化同步到 rule
+  useEffect(() => {
+    const d = anchorDate.value
+    const dateStr = d.toISOString().slice(0, 10)
+    if (dateStr !== rule.value.anchorDate) {
+      rule.setValue({
+        ...rule.value,
+        mode: "once",
+        anchorDate: dateStr,
+      })
+    }
+  }, [anchorDate.value])
 
   return (
     <List navigationTitle="仅一次" navigationBarTitleDisplayMode="inline">
