@@ -1,15 +1,24 @@
 // Settings.tsx - 设置页
-import { useObservable, NavigationStack, List, Section, Text, Toggle, Stepper, Button, NavigationLink, HStack, Spacer } from "scripting"
+import { useObservable, NavigationStack, List, Section, Text, Toggle, Stepper, Button, HStack, Spacer, Navigation, useEffect } from "scripting"
 import { loadSettings, saveSettings, loadGroups } from "../lib/alarm-store"
 import { loadHolidays, resetYearToDefault } from "../lib/holiday"
 import { AppSettings, HolidayCalendar } from "../lib/constants"
 import { HolidayEditor } from "./HolidayEditor"
 import { GroupManager } from "./GroupManager"
 
-export function Settings() {
+export function Settings({ selection }: { selection: Observable<number> }) {
   const settings = useObservable<AppSettings>(() => loadSettings())
   const holidays = useObservable<HolidayCalendar[]>(() => loadHolidays())
-  const groupCount = loadGroups().length
+  const groupCount = useObservable<number>(() => loadGroups().length)
+
+  // 监听 Tab 切换：切回设置 Tab 时重新加载
+  useEffect(() => {
+    if (selection.value === 2) {
+      settings.setValue(loadSettings())
+      holidays.setValue(loadHolidays())
+      groupCount.setValue(loadGroups().length)
+    }
+  }, [selection.value])
 
   const updateSetting = (updates: Partial<AppSettings>) => {
     const newSettings = { ...settings.value, ...updates }
@@ -27,18 +36,26 @@ export function Settings() {
     holidays.setValue(loadHolidays())
   }
 
+  // 导航到子页面，返回后刷新数据
+  const presentPage = (element: JSX.Element) => {
+    Navigation.present({ element, modalPresentationStyle: "fullScreen" }).then(() => {
+      holidays.setValue(loadHolidays())
+      groupCount.setValue(loadGroups().length)
+    })
+  }
+
   return (
     <NavigationStack>
       <List navigationTitle="设置">
         {/* 调休日历 */}
         <Section header={<Text>调休日历</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">在闹钟的重复设置中选择调休动作（跳过/顺延），法定节假日当天自动处理</Text>}>
-          <NavigationLink destination={<HolidayEditor />}>
+          <Button action={() => presentPage(<HolidayEditor />)}>
             <HStack alignment="center">
               <Text>节假日安排</Text>
               <Spacer />
               <Text foregroundStyle="secondaryLabel">{holidayCount}假 {workdayCount}补</Text>
             </HStack>
-          </NavigationLink>
+          </Button>
           <Button title="重置为默认值" action={handleResetHolidays} />
         </Section>
 
@@ -65,13 +82,13 @@ export function Settings() {
 
         {/* 数据管理 */}
         <Section header={<Text>数据管理</Text>}>
-          <NavigationLink destination={<GroupManager />}>
+          <Button action={() => presentPage(<GroupManager />)}>
             <HStack alignment="center">
               <Text>闹钟分类</Text>
               <Spacer />
-              <Text foregroundStyle="secondaryLabel">{groupCount} 个分类</Text>
+              <Text foregroundStyle="secondaryLabel">{groupCount.value} 个分类</Text>
             </HStack>
-          </NavigationLink>
+          </Button>
           <Text font={13} foregroundStyle="secondaryLabel">中国闹钟 v1.0.0</Text>
         </Section>
       </List>

@@ -1,5 +1,5 @@
 // CreditCardList.tsx - 信用卡列表页
-import { useState, useObservable, NavigationStack, List, Section, Text, ForEach, Button, HStack, VStack, ContentUnavailableView, Navigation } from "scripting"
+import { useState, useObservable, NavigationStack, List, Section, Text, ForEach, Button, HStack, VStack, ContentUnavailableView, Navigation, useEffect } from "scripting"
 import { CreditCard } from "../lib/constants"
 import { loadCards, updateCard, deleteCard, getNextDueDate, formatDateCN } from "../lib/credit-card"
 import { AddCreditCard } from "./AddCreditCard"
@@ -37,11 +37,18 @@ function CardRow({ card, onEdit, onToggle }: { card: CreditCard; onEdit: (id: st
   )
 }
 
-export function CreditCardList() {
+export function CreditCardList({ selection }: { selection: Observable<number> }) {
   const cards = useObservable<CreditCard[]>(() => loadSortedCards())
   // toast 状态
   const [toastMsg, setToastMsg] = useState("")
   const [toastShown, setToastShown] = useState(false)
+
+  // 监听 Tab 切换：切回信用卡 Tab 时重新加载
+  useEffect(() => {
+    if (selection.value === 1) {
+      cards.setValue(loadSortedCards())
+    }
+  }, [selection.value])
 
   // 弹出添加/编辑信用卡模态页，关闭后刷新
   const presentEditor = (editId?: string) => {
@@ -67,7 +74,7 @@ export function CreditCardList() {
     updateCard(id, { enabled })
     setToastMsg(enabled ? "信用卡已启用" : "信用卡已停用")
     setToastShown(true)
-    cards.setValue(loadCards())
+    cards.setValue(loadSortedCards())
   }
 
   return (

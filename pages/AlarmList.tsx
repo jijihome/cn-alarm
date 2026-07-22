@@ -8,6 +8,18 @@ import { AlarmRow } from "../components/AlarmRow"
 import { AddAlarm } from "./AddAlarm"
 
 function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
+  // 倒计时定时器：每秒刷新（setTimeout 递归模拟 setInterval）
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    let timerId: number
+    const tick = () => {
+      setTick((t) => t + 1)
+      timerId = setTimeout(tick, 1000)
+    }
+    timerId = setTimeout(tick, 1000)
+    return () => clearTimeout(timerId)
+  }, [])
+
   const enabled = alarms.filter((a) => a.enabled)
   if (enabled.length === 0) {
     return (
@@ -38,11 +50,18 @@ function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
   )
 }
 
-export function AlarmList() {
+export function AlarmList({ selection }: { selection: Observable<number> }) {
   const alarms = useObservable<AlarmItem[]>(() => loadAlarms())
   // toast 状态
   const [toastMsg, setToastMsg] = useState("")
   const [toastShown, setToastShown] = useState(false)
+
+  // 监听 Tab 切换：切回闹钟 Tab 时重新加载（其他页面可能改了调休/分类/闹钟数据）
+  useEffect(() => {
+    if (selection.value === 0) {
+      alarms.setValue(loadAlarms())
+    }
+  }, [selection.value])
 
   // 同步 alarms Observable → Storage（swipe 删除后自动触发）
   const prevAlarmIdsRef = useObservable<string[]>(() => alarms.value.map(a => a.id))
