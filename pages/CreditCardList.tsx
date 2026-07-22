@@ -1,8 +1,35 @@
 // CreditCardList.tsx - 信用卡列表页
 import { useState, useObservable, NavigationStack, List, Section, Text, ForEach, Button, HStack, VStack, Toggle, ContentUnavailableView, Navigation, useEffect } from "scripting"
-import { CreditCard } from "../lib/constants"
+import { CreditCard, ReminderTypeConfig } from "../lib/constants"
 import { loadCards, updateCard, getNextDueDate, formatDateCN, syncCardAlarmsById, cancelCardAlarmsById } from "../lib/credit-card"
 import { AddCreditCard } from "./AddCreditCard"
+
+/** 迁移旧 boolean 格式 → ReminderTypeConfig */
+function migrateRT(raw: any): ReminderTypeConfig {
+  if (typeof raw === "boolean") return { enabled: raw, hour: 9, minute: 0 }
+  if (raw && typeof raw === "object" && "enabled" in raw) return { enabled: raw.enabled, hour: raw.hour ?? 9, minute: raw.minute ?? 0 }
+  return { enabled: true, hour: 9, minute: 0 }
+}
+
+/** 格式化时间 HH:MM */
+function fmtTime(h: number, m: number): string {
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+}
+
+/** 生成提醒类型摘要文字 */
+function reminderSummary(card: CreditCard): string {
+  const rt = card.reminderTypes
+  const parts: string[] = []
+  const stm = migrateRT(rt?.statement)
+  const adv = migrateRT(rt?.advance)
+  const due = migrateRT(rt?.due)
+  const buf = migrateRT(rt?.buffer)
+  if (stm.enabled) parts.push(`出账${fmtTime(stm.hour, stm.minute)}`)
+  if (adv.enabled) parts.push(`提前${fmtTime(adv.hour, adv.minute)}`)
+  if (due.enabled) parts.push(`截止${fmtTime(due.hour, due.minute)}`)
+  if (buf.enabled) parts.push(`宽限${fmtTime(buf.hour, buf.minute)}`)
+  return parts.length ? parts.join(" · ") : "无提醒"
+}
 
 /** 按银行名拼音排序加载信用卡 */
 const loadSortedCards = (): CreditCard[] =>
@@ -34,6 +61,7 @@ function CardRow({ card, onEdit, onToggle }: { card: CreditCard; onEdit: (id: st
             <Text font={12} foregroundStyle="systemRed">仅剩{daysUntilDue}天!</Text>
           )}
         </HStack>
+        <Text font={12} foregroundStyle="tertiaryLabel">{reminderSummary(card)}</Text>
       </VStack>
     </Toggle>
   )
