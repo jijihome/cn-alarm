@@ -71,6 +71,10 @@ export interface RepeatRule {
   /** 调休动作：none/skip/defer。旧数据 holidayAware 通过 normalizeRule 迁移 */
   holidayAction: HolidayAction
   anchorDate?: string
+  /** 结束日期（ISO date string，如 "2026-12-31"），该日期当天仍触发，之后不再触发 */
+  endDate?: string
+  /** N个周期后停止（从 anchorDate 起算）。daily=N个interval天 / weekly=N个interval周 / monthly=N个interval月 / yearly=N年 / lunar_yearly=N年 / workday=N个工作日 */
+  endAfterOccurrences?: number
 }
 
 /** 把旧 RepeatRule（holidayAware: boolean）迁移到新 holidayAction 枚举 */

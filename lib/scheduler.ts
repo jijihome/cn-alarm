@@ -6,6 +6,75 @@ import { lunarToSolar } from "./lunar"
 import { getNextSolarTerm } from "./solar-term"
 
 
+// ==================== 结束条件判断 ====================
+
+/** 判断候选触发时间是否超过 endDate */
+function isPastEndDate(repeat: RepeatRule, candidate: Date): boolean {
+  if (!repeat.endDate) return false
+  // endDate 当天仍触发：只比较日期部分，candidate 日期 > endDate 日期
+  const endDate = new Date(repeat.endDate)
+  endDate.setHours(23, 59, 59, 999) // endDate 当天 23:59:59.999
+  return candidate.getTime() > endDate.getTime()
+}
+
+/** 计算从 anchorDate 到 now 已过的周期数（用于 endAfterOccurrences 判断） */
+function getElapsedOccurrences(repeat: RepeatRule, now: Date): number {
+  const endN = repeat.endAfterOccurrences
+  if (!endN || endN <= 0) return 0
+
+  // anchorDate 是必需的基准点，缺失时用 30 天前作为兜底
+  const anchorStr = repeat.anchorDate
+  if (!anchorStr) return 0
+  const anchor = new Date(anchorStr)
+  if (now <= anchor) return 0
+
+  const interval = repeat.interval || 1
+
+  switch (repeat.mode) {
+    case "daily": {
+      const daysDiff = Math.floor((now.getTime() - anchor.getTime()) / (24 * 60 * 60 * 1000))
+      return Math.floor(daysDiff / interval)
+    }
+    case "weekly": {
+      const weeksDiff = Math.floor((now.getTime() - anchor.getTime()) / (7 * 24 * 60 * 60 * 1000))
+      return Math.floor(weeksDiff / interval)
+    }
+    case "monthly": {
+      const monthsDiff = (now.getFullYear() - anchor.getFullYear()) * 12 + (now.getMonth() - anchor.getMonth())
+      return Math.floor(monthsDiff / interval)
+    }
+    case "yearly":
+    case "lunar_yearly": {
+      return now.getFullYear() - anchor.getFullYear()
+    }
+    case "workday": {
+      // 工作日模式：从 anchor 逐日数到 now 的实际工作日数
+      let count = 0
+      const d = new Date(anchor)
+      while (d < now) {
+        const dayOfWeek = d.getDay()
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+        const isHol = isHoliday(d)
+        const isWork = isWorkday(d)
+        if (isWork || (!isWeekend && !isHol)) {
+          count++
+        }
+        d.setDate(d.getDate() + 1)
+      }
+      return Math.floor(count / interval)
+    }
+    default:
+      return 0
+  }
+}
+
+/** 判断是否已达到 endAfterOccurrences 限制 */
+function hasReachedOccurrenceLimit(repeat: RepeatRule, now: Date): boolean {
+  const endN = repeat.endAfterOccurrences
+  if (!endN || endN <= 0) return false
+  return getElapsedOccurrences(repeat, now) >= endN
+}
+
 // ==================== 辅助：defer 顺延 ====================
 // 候选日是节假日时，逐日 +1 直到非节假日（补班日算非节假日，停）
 function deferPastHoliday(candidate: Date): Date {
@@ -22,24 +91,26 @@ function deferPastHoliday(candidate: Date): Date {
 export function getNextTrigger(alarm: AlarmItem, now: Date): Date | null {
   if (!alarm.enabled) return null
 
-  switch (alarm.repeat.mode) {
-    case "once":
-      return getNextOnce(alarm, now)
-    case "daily":
-      return getNextDaily(alarm, now)
-    case "weekly":
-      return getNextWeekly(alarm, now)
-    case "monthly":
-      return getNextMonthly(alarm, now)
-    case "yearly":
-      return getNextYearly(alarm, now)
-    case "lunar_yearly":
-      return getNextLunar(alarm, now)
-    case "workday":
-      return getNextWorkday(alarm, now)
-    default:
-      return null
-  }
+  // 结束条件判断：endAfterOccurrences
+  if (hasReachedOccurrenceLimit(alarm.repeat, now)) return null
+
+  const result = (() => {
+    switch (alarm.repeat.mode) {
+      case "once": return getNextOnce(alarm, now)
+      case "daily": return getNextDaily(alarm, now)
+      case "weekly": return getNextWeekly(alarm, now)
+      case "monthly": return getNextMonthly(alarm, now)
+      case "yearly": return getNextYearly(alarm, now)
+      case "lunar_yearly": return getNextLunar(alarm, now)
+      case "workday": return getNextWorkday(alarm, now)
+      default: return null
+    }
+  })()
+
+  // 结束条件判断：endDate（候选日 > endDate 时返回 null）
+  if (result && isPastEndDate(alarm.repeat, result)) return null
+
+  return result
 }
 
 // ==================== once: 一次性 ====================
@@ -441,6 +512,40 @@ function holidaySuffix(action: HolidayAction | undefined): string {
   return ""
 }
 
+// 结束条件后缀
+function endConditionSuffix(repeat: RepeatRule): string {
+  const parts: string[] = []
+  if (repeat.endDate) {
+    const d = new Date(repeat.endDate)
+    parts.push(`至${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`)
+  }
+  if (repeat.endAfterOccurrences && repeat.endAfterOccurrences > 0) {
+    const n = repeat.endAfterOccurrences
+    const interval = repeat.interval || 1
+    switch (repeat.mode) {
+      case "daily":
+        parts.push(interval === 1 ? `共${n}天` : `共${n}个周期`)
+        break
+      case "weekly":
+        parts.push(interval === 1 ? `共${n}周` : `共${n}个周期`)
+        break
+      case "monthly":
+        parts.push(interval === 1 ? `共${n}个月` : `共${n}个周期`)
+        break
+      case "yearly":
+      case "lunar_yearly":
+        parts.push(`共${n}年`)
+        break
+      case "workday":
+        parts.push(interval === 1 ? `共${n}个工作日` : `共${n}个周期`)
+        break
+      default:
+        parts.push(`共${n}个周期`)
+    }
+  }
+  return parts.length > 0 ? "（" + parts.join("，") + "）" : ""
+}
+
 export function formatRepeatDescription(repeat: RepeatRule): string {
   const weekdayLabels = ["日", "一", "二", "三", "四", "五", "六"]
 
@@ -455,14 +560,14 @@ export function formatRepeatDescription(repeat: RepeatRule): string {
 
     case "daily": {
       const base = repeat.interval === 1 ? "每天" : `每${repeat.interval}天`
-      return base + holidaySuffix(repeat.holidayAction)
+      return base + holidaySuffix(repeat.holidayAction) + endConditionSuffix(repeat)
     }
 
     case "weekly": {
       const days = (repeat.weekdays ?? []).sort()
       const labels = days.map((d) => weekdayLabels[d - 1]).join("至")
       const prefix = repeat.interval === 1 ? "" : `每${repeat.interval}周 `
-      return `${prefix}每周${labels}${holidaySuffix(repeat.holidayAction)}`
+      return `${prefix}每周${labels}${holidaySuffix(repeat.holidayAction)}${endConditionSuffix(repeat)}`
     }
 
     case "monthly": {
@@ -474,7 +579,7 @@ export function formatRepeatDescription(repeat: RepeatRule): string {
       } else {
         base = repeat.interval === 1 ? `每月${repeat.dayOfMonth}号` : `每${repeat.interval}月 ${repeat.dayOfMonth}号`
       }
-      return base + holidaySuffix(repeat.holidayAction)
+      return base + holidaySuffix(repeat.holidayAction) + endConditionSuffix(repeat)
     }
 
     case "yearly": {
@@ -490,15 +595,15 @@ export function formatRepeatDescription(repeat: RepeatRule): string {
       } else {
         base = `每年${repeat.monthOfYear}月${repeat.dayOfMonth}号`
       }
-      return base + holidaySuffix(repeat.holidayAction)
+      return base + holidaySuffix(repeat.holidayAction) + endConditionSuffix(repeat)
     }
 
     case "lunar_yearly":
-      return `农历每年${repeat.lunarMonth}月${repeat.lunarDay}${holidaySuffix(repeat.holidayAction)}`
+      return `农历每年${repeat.lunarMonth}月${repeat.lunarDay}${holidaySuffix(repeat.holidayAction)}${endConditionSuffix(repeat)}`
 
     case "workday":
-      if (repeat.interval === 1) return "每个工作日"
-      return `每${repeat.interval}个工作日`
+      if (repeat.interval === 1) return "每个工作日" + endConditionSuffix(repeat)
+      return `每${repeat.interval}个工作日${endConditionSuffix(repeat)}`
 
     default:
       return ""

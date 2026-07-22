@@ -2,7 +2,7 @@
 import { useState, useObservable, NavigationStack, List, Section, Text, Button, ContentUnavailableView, VStack, HStack, Navigation, ForEach, useEffect } from "scripting"
 import { AlarmItem, AlarmSortKey } from "../lib/constants"
 import { loadAlarms, saveAlarms, updateAlarm, confirmReminder, unconfirmAllReminders, isReminderConfirmed, getUnconfirmedTimes, makeConfirmKey, loadSettings, saveSettings } from "../lib/alarm-store"
-import { getNextAlarmFromList, formatCountdown, formatRepeatDescription } from "../lib/scheduler"
+import { getNextAlarmFromList, formatCountdown, formatRepeatDescription, getNextTrigger } from "../lib/scheduler"
 import { scheduleAlarm, cancelAlarm, cancelAllAlarms, cancelRetryAlarms, ScheduleResult } from "../lib/alarm-bridge"
 import { sortAlarms, ALARM_SORT_OPTIONS, alarmSortTitle } from "../lib/sort"
 import { AlarmRow } from "../components/AlarmRow"
@@ -13,9 +13,32 @@ import { Settings } from "./Settings"
 const presentSettings = () =>
   Navigation.present({ element: <Settings />, modalPresentationStyle: "pageSheet" })
 
-/** 加载并排序用户闹钟 */
-const loadSortedUserAlarms = (sortBy: AlarmSortKey, ascending: boolean): AlarmItem[] =>
-  sortAlarms(loadAlarms().filter((a) => a.source !== "credit_card"), sortBy, ascending)
+/** 检查并禁用已到期闹钟（结束条件已过），返回是否有变更 */
+function disableExpiredAlarms(): boolean {
+  const now = new Date()
+  const allAlarms = loadAlarms()
+  let changed = false
+  const updated = allAlarms.map(a => {
+    if (a.enabled && (a.repeat.endDate || a.repeat.endAfterOccurrences)) {
+      const next = getNextTrigger(a, now)
+      if (!next) {
+        changed = true
+        // 异步取消系统闹钟
+        cancelAllAlarms(a).catch(() => {})
+        return { ...a, enabled: false, alarmIds: [], retryAlarmIds: [], updatedAt: now.getTime() }
+      }
+    }
+    return a
+  })
+  if (changed) saveAlarms(updated)
+  return changed
+}
+
+/** 加载并排序用户闹钟（含到期自动禁用） */
+const loadSortedUserAlarms = (sortBy: AlarmSortKey, ascending: boolean): AlarmItem[] => {
+  disableExpiredAlarms()
+  return sortAlarms(loadAlarms().filter((a) => a.source !== "credit_card"), sortBy, ascending)
+}
 
 function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
   // 倒计时定时器：每秒刷新（setTimeout 递归模拟 setInterval）

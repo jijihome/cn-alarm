@@ -15,6 +15,7 @@ import { YearlyRepeatPage } from "./YearlyRepeatPage"
 import { LunarRepeatPage } from "./LunarRepeatPage"
 import { WorkdayRepeatPage } from "./WorkdayRepeatPage"
 import { OnceRepeatPage } from "./OnceRepeatPage"
+import { EndConditionPicker } from "./EndConditionPicker"
 
 const REPEAT_MODES: { value: RepeatMode; label: string }[] = [
   { value: "once", label: "仅一次" },
@@ -58,24 +59,28 @@ export function RepeatSettings({ rule }: RepeatSettingsProps) {
   })()
 
   return (
-    <Section header={<Text>重复</Text>}>
-      <NavigationLink destination={<RepeatModePickerPage rule={rule} />}>
-        <HStack alignment="center">
-          <Text>模式</Text>
-          <Spacer />
-          <Text foregroundStyle="secondaryLabel">{currentLabel}</Text>
-        </HStack>
-      </NavigationLink>
-      <NavigationLink
-        destination={settingsDestination}
-      >
-        <HStack alignment="center">
-          <Text>设置</Text>
-          <Spacer />
-          <Text foregroundStyle="secondaryLabel">{summary}</Text>
-        </HStack>
-      </NavigationLink>
-    </Section>
+    <>
+      <Section header={<Text>重复</Text>}>
+        <NavigationLink destination={<RepeatModePickerPage rule={rule} />}>
+          <HStack alignment="center">
+            <Text>模式</Text>
+            <Spacer />
+            <Text foregroundStyle="secondaryLabel">{currentLabel}</Text>
+          </HStack>
+        </NavigationLink>
+        <NavigationLink
+          destination={settingsDestination}
+        >
+          <HStack alignment="center">
+            <Text>设置</Text>
+            <Spacer />
+            <Text foregroundStyle="secondaryLabel">{summary}</Text>
+          </HStack>
+        </NavigationLink>
+      </Section>
+      {/* once 模式不需要结束条件（本身一次性） */}
+      {mode !== "once" && <EndConditionPicker rule={rule} />}
+    </>
   )
 }
 
