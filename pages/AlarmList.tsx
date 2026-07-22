@@ -7,6 +7,10 @@ import { scheduleAlarm, cancelAlarm } from "../lib/alarm-bridge"
 import { AlarmRow } from "../components/AlarmRow"
 import { AddAlarm } from "./AddAlarm"
 
+/** 加载用户闹钟（排除信用卡自动闹钟） */
+const loadUserAlarms = (): AlarmItem[] =>
+  loadAlarms().filter((a) => a.source !== "credit_card")
+
 function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
   // 倒计时定时器：每秒刷新（setTimeout 递归模拟 setInterval）
   const [, setTick] = useState(0)
@@ -51,7 +55,7 @@ function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
 }
 
 export function AlarmList({ selection }: { selection: Observable<number> }) {
-  const alarms = useObservable<AlarmItem[]>(() => loadAlarms())
+  const alarms = useObservable<AlarmItem[]>(() => loadUserAlarms())
   // toast 状态
   const [toastMsg, setToastMsg] = useState("")
   const [toastShown, setToastShown] = useState(false)
@@ -59,7 +63,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
   // 监听 Tab 切换：切回闹钟 Tab 时重新加载（其他页面可能改了调休/分类/闹钟数据）
   useEffect(() => {
     if (selection.value === 0) {
-      alarms.setValue(loadAlarms())
+      alarms.setValue(loadUserAlarms())
     }
   }, [selection.value])
 
@@ -72,7 +76,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
     const deletedIds = prevIds.filter(id => !currentIds.has(id))
     if (deletedIds.length > 0) {
       // 取消被删闹钟的系统提醒（从 storage 读旧数据取 alarmIds）
-      const oldAlarms = loadAlarms()
+      const oldAlarms = loadUserAlarms()
       for (const delId of deletedIds) {
         const oldAlarm = oldAlarms.find(a => a.id === delId)
         if (oldAlarm) {
@@ -81,8 +85,9 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
           }
         }
       }
-      // 同步到 storage
-      saveAlarms(alarms.value)
+      // 同步到 storage（保留信用卡闹钟，只更新用户闹钟部分）
+      const cardAlarms = loadAlarms().filter(a => a.source === "credit_card")
+      saveAlarms([...alarms.value, ...cardAlarms])
       // 显示toast
       setToastMsg(deletedIds.length === 1 ? "闹钟已删除" : `已删除${deletedIds.length}个闹钟`)
       setToastShown(true)
@@ -99,7 +104,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
     }).then((result: any) => {
       // 只有真正保存才处理调度和 toast
       if (result?.saved && result?.alarmId) {
-        const alarm = loadAlarms().find(a => a.id === result.alarmId)
+        const alarm = loadUserAlarms().find(a => a.id === result.alarmId)
         if (alarm && alarm.enabled) {
           // 先取消旧的系统闹钟（编辑场景）
           if (alarm.alarmIds.length > 0) {
@@ -114,14 +119,14 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
               setToastMsg("闹钟已保存，但系统调度失败")
             }
             setToastShown(true)
-            alarms.setValue(loadAlarms())
+            alarms.setValue(loadUserAlarms())
           })
         } else {
           setToastMsg(editId ? "闹钟已更新" : "闹钟已添加")
           setToastShown(true)
         }
       }
-      alarms.setValue(loadAlarms())
+      alarms.setValue(loadUserAlarms())
     })
   }
 
@@ -135,7 +140,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
     if (enabled) {
       // 启用：先立即更新本地状态，再异步创建系统闹钟
       updateAlarm(id, { enabled: true, alarmIds: [] })
-      alarms.setValue(loadAlarms())
+      alarms.setValue(loadUserAlarms())
       scheduleAlarm(alarm).then((alarmId: string | null) => {
         if (alarmId) {
           updateAlarm(id, { alarmIds: [alarmId] })
@@ -147,13 +152,13 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
           setToastMsg("系统提醒创建失败，闹钟未启用")
           setToastShown(true)
         }
-        alarms.setValue(loadAlarms())
+        alarms.setValue(loadUserAlarms())
       })
     } else {
       // 停用：先立即更新本地状态，再异步取消系统闹钟
       const oldAlarmIds = [...alarm.alarmIds]
       updateAlarm(id, { enabled: false, alarmIds: [] })
-      alarms.setValue(loadAlarms())
+      alarms.setValue(loadUserAlarms())
       setToastMsg("闹钟已停用")
       setToastShown(true)
       // 异步取消系统闹钟（fire-and-forget，失败不影响本地状态）

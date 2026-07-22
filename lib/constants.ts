@@ -78,6 +78,8 @@ export interface AlarmItem {
   tintColor: string
   createdAt: number
   updatedAt: number
+  /** 来源标记：undefined/"user"=用户闹钟，"credit_card"=信用卡自动闹钟（不在闹钟列表显示） */
+  source?: "user" | "credit_card"
 }
 
 export interface AlarmGroup {
@@ -99,6 +101,13 @@ export interface CreditCard {
   enabled: boolean
   tintColor: string
   alarmItemIds: string[]
+  /** 提醒类型配置，默认全开 9:00。undefined 视为全开 9:00（兼容旧数据） */
+  reminderTypes?: {
+    statement: ReminderTypeConfig  // 账单已出
+    advance: ReminderTypeConfig    // 提前提醒
+    due: ReminderTypeConfig         // 还款截止
+    buffer: ReminderTypeConfig      // 宽限期最后一天
+  }
 }
 
 export interface HolidayEntry {

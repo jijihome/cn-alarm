@@ -93,13 +93,17 @@ function createCardAlarm(card: CreditCard, date: Date, titleSuffix: string, tint
     tintColor,
     tag: card.last4Digits,
     note: `${card.bankName} 尾号${card.last4Digits}`,
+    source: "credit_card",
   })
 }
 
-// 为一张卡生成本月+下月的4×2=8个闹钟
+// 为一张卡生成本月+下月的提醒闹钟（按 reminderTypes 过滤）
 export function generateCardAlarms(card: CreditCard): AlarmItem[] {
   const now = new Date()
   const alarms: AlarmItem[] = []
+
+  // 兼容旧数据：reminderTypes 缺失时全开
+  const rt = card.reminderTypes ?? { statement: true, advance: true, due: true, buffer: true }
 
   let year = now.getFullYear()
   let month = now.getMonth() + 1
@@ -110,17 +114,17 @@ export function generateCardAlarms(card: CreditCard): AlarmItem[] {
     const remindDate = calculateRemindDate(card, year, month)
     const bufferEnd = calculateBufferEndDate(card, year, month)
 
-    // 只生成未来的闹钟
-    if (statementDate > now) {
+    // 只生成未来的闹钟，且只生成用户启用的类型
+    if (rt.statement && statementDate > now) {
       alarms.push(createCardAlarm(card, statementDate, "账单已出", card.tintColor))
     }
-    if (remindDate > now) {
+    if (rt.advance && remindDate > now) {
       alarms.push(createCardAlarm(card, remindDate, `${card.remindDaysBefore}天后还款`, card.tintColor))
     }
-    if (dueDate > now) {
+    if (rt.due && dueDate > now) {
       alarms.push(createCardAlarm(card, dueDate, "今日还款截止", card.tintColor))
     }
-    if (bufferEnd > now) {
+    if (rt.buffer && bufferEnd > now) {
       alarms.push(createCardAlarm(card, bufferEnd, "宽限期最后一天！", "systemRed"))
     }
 
@@ -166,8 +170,8 @@ export async function syncCardAlarms(card: CreditCard): Promise<CreditCard> {
   return updated ?? card
 }
 
-// ==================== 创建新信用卡 ====================
-export async function createCard(partial: Partial<CreditCard>): Promise<CreditCard> {
+// ==================== 同步创建（仅写 Storage，不调度系统闹钟）====================
+export function createCardSync(partial: Partial<CreditCard>): CreditCard {
   const card: CreditCard = {
     id: generateUUID(),
     bankName: "招商银行",
@@ -179,28 +183,57 @@ export async function createCard(partial: Partial<CreditCard>): Promise<CreditCa
     enabled: true,
     tintColor: "systemOrange",
     alarmItemIds: [],
+    reminderTypes: { statement: true, advance: true, due: true, buffer: true },
     ...partial,
   }
-
   addCard(card)
+  return card
+}
+
+// ==================== 同步删除（仅写 Storage，不取消系统闹钟）====================
+export function removeCardSync(id: string): CreditCard | null {
+  const card = getCardById(id)
+  if (card) {
+    // 从 alarm-store 删除关联闹钟记录
+    const allAlarms = loadAlarms()
+    const remaining = allAlarms.filter((a) => !card.alarmItemIds.includes(a.id))
+    saveAlarms(remaining)
+    removeCard(id)
+  }
+  return card
+}
+
+// ==================== 异步同步信用卡闹钟（调用方在 .then 里调）====================
+export async function syncCardAlarmsById(cardId: string): Promise<CreditCard | null> {
+  const card = getCardById(cardId)
+  if (!card) return null
+  return syncCardAlarms(card)
+}
+
+// ==================== 异步取消信用卡系统闹钟（调用方在 .then 里调）====================
+export async function cancelCardAlarmsById(cardId: string): Promise<void> {
+  const card = getCardById(cardId)
+  if (!card) return
+  for (const alarmId of card.alarmItemIds) {
+    await cancelAlarm(alarmId)
+  }
+}
+
+// ==================== 创建新信用卡（保留原 async 版本，内部用同步+异步）====================
+export async function createCard(partial: Partial<CreditCard>): Promise<CreditCard> {
+  const card = createCardSync(partial)
   const synced = await syncCardAlarms(card)
   return synced
 }
 
-// ==================== 删除信用卡 ====================
+// ==================== 删除信用卡（保留原 async 版本）====================
 export async function deleteCard(id: string): Promise<void> {
-  const card = getCardById(id)
+  const card = removeCardSync(id)
   if (card) {
-    // 取消所有系统闹钟
     for (const alarmId of card.alarmItemIds) {
       await cancelAlarm(alarmId)
     }
-    // 从 alarm-store 删除关联闹钟
-    const allAlarms = loadAlarms()
-    const remaining = allAlarms.filter((a) => !card.alarmItemIds.includes(a.id))
-    saveAlarms(remaining)
   }
-  removeCard(id)
 }
 
 // ==================== 格式化日期 ====================

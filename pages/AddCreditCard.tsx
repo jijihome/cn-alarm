@@ -1,7 +1,7 @@
 // AddCreditCard.tsx - 添加/编辑信用卡页
-import { useObservable, NavigationStack, List, Section, Text, Picker, TextField, Button, Stepper, Navigation, useState, HStack, Spacer } from "scripting"
+import { useObservable, NavigationStack, List, Section, Text, Picker, TextField, Button, Stepper, Toggle, Navigation, useState, HStack, Spacer } from "scripting"
 import { CreditCard, BANK_PRESETS } from "../lib/constants"
-import { createCard, updateCard, syncCardAlarms, getCardById, deleteCard } from "../lib/credit-card"
+import { createCardSync, updateCard, removeCardSync, syncCardAlarmsById, cancelCardAlarmsById, getCardById } from "../lib/credit-card"
 
 const COLOR_OPTIONS = [
   { label: "橙", value: "systemOrange" },
@@ -40,6 +40,13 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
   const remindDaysBefore = useObservable(existing?.remindDaysBefore ?? 3)
   const tintColor = useObservable(existing?.tintColor ?? "systemOrange")
 
+  // 提醒类型开关（兼容旧数据：缺失时全开）
+  const defaultRT = existing?.reminderTypes ?? { statement: true, advance: true, due: true, buffer: true }
+  const rtStatement = useObservable(defaultRT.statement)
+  const rtAdvance = useObservable(defaultRT.advance)
+  const rtDue = useObservable(defaultRT.due)
+  const rtBuffer = useObservable(defaultRT.buffer)
+
   const pickerValue = isCustom.value ? CUSTOM_TAG : bankName.value
 
   const handleSave = () => {
@@ -66,22 +73,29 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
       bufferDays: bufferDays.value,
       remindDaysBefore: remindDaysBefore.value,
       tintColor: tintColor.value,
+      reminderTypes: {
+        statement: rtStatement.value,
+        advance: rtAdvance.value,
+        due: rtDue.value,
+        buffer: rtBuffer.value,
+      },
     }
 
     if (editId && existing) {
       updateCard(editId, cardData)
+      dismiss({ saved: true, cardId: editId })
     } else {
-      createCard(cardData)
+      const card = createCardSync(cardData)
+      dismiss({ saved: true, cardId: card.id })
     }
-    dismiss({ saved: true })
   }
 
   const handleDelete = () => {
     if (!editId) return
-    // 先关闭确认框，再执行删除
+    // 先关闭确认框，再执行同步删除
     setShowDeleteConfirm(false)
-    deleteCard(editId)
-    dismiss({ deleted: true })
+    const card = removeCardSync(editId)
+    dismiss({ deleted: true, cardId: card?.id ?? editId })
   }
 
   return (
@@ -176,6 +190,13 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
               <Text foregroundStyle="secondaryLabel">{remindDaysBefore.value}天</Text>
             </HStack>
           </Stepper>
+        </Section>
+
+        <Section header={<Text>提醒类型</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">选择需要提醒的日期，关闭的不会生成闹钟</Text>}>
+          <Toggle title="账单已出" value={rtStatement} />
+          <Toggle title={`提前${remindDaysBefore.value}天提醒`} value={rtAdvance} />
+          <Toggle title="还款截止日" value={rtDue} />
+          <Toggle title="宽限期最后一天" value={rtBuffer} />
         </Section>
 
         <Section header={<Text>外观</Text>}>
