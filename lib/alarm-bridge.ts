@@ -97,7 +97,7 @@ async function scheduleSingleAlarm(
   const params: Record<string, any> = {
     title: alarm.title,
     tintColor: alarm.tintColor,
-    metadata: { alarmItemId: alarm.id, hour, minute },
+    metadata: { alarmItemId: alarm.id, hour: String(hour), minute: String(minute) },
   }
 
   // 渐进唤醒：preAlert 为用户设置的提前秒数，postAlert 为正式响铃持续时长

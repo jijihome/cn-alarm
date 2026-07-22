@@ -238,3 +238,20 @@ export function getUnconfirmedTimes(alarm: AlarmItem, date: Date): { hour: numbe
   ]
   return allTimes.filter(t => !isReminderConfirmed(alarm, date, t.hour, t.minute))
 }
+
+/** 取消确认：删除该闹钟当天所有已确认记录，恢复为待确认状态 */
+export function unconfirmAllReminders(alarmId: string, date: Date): void {
+  const items = loadAlarms()
+  const idx = items.findIndex(a => a.id === alarmId)
+  if (idx === -1) return
+  const alarm = items[idx]
+  if (!alarm.confirmedReminders) return
+  const datePrefix = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}_`
+  for (const k of Object.keys(alarm.confirmedReminders)) {
+    if (k.startsWith(datePrefix)) {
+      delete alarm.confirmedReminders[k]
+    }
+  }
+  alarm.updatedAt = Date.now()
+  saveAlarms(items)
+}

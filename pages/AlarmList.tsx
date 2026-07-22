@@ -1,7 +1,7 @@
 // AlarmList.tsx - 闹钟列表页
 import { useState, useObservable, NavigationStack, List, Section, Text, Button, EditButton, ContentUnavailableView, VStack, HStack, Navigation, ForEach, useEffect } from "scripting"
 import { AlarmItem } from "../lib/constants"
-import { loadAlarms, saveAlarms, updateAlarm, confirmReminder, isReminderConfirmed, getUnconfirmedTimes, makeConfirmKey } from "../lib/alarm-store"
+import { loadAlarms, saveAlarms, updateAlarm, confirmReminder, unconfirmAllReminders, isReminderConfirmed, getUnconfirmedTimes, makeConfirmKey } from "../lib/alarm-store"
 import { getNextAlarmFromList, formatCountdown, formatRepeatDescription } from "../lib/scheduler"
 import { scheduleAlarm, cancelAlarm, cancelAllAlarms, cancelRetryAlarms, ScheduleResult } from "../lib/alarm-bridge"
 import { AlarmRow } from "../components/AlarmRow"
@@ -151,6 +151,14 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
     alarms.setValue(loadUserAlarms())
   }
 
+  const handleUnconfirm = (alarm: AlarmItem) => {
+    const today = new Date()
+    unconfirmAllReminders(alarm.id, today)
+    setToastMsg(`已取消确认: ${alarm.title}`)
+    setToastShown(true)
+    alarms.setValue(loadUserAlarms())
+  }
+
   const handleToggle = (id: string, enabled: boolean) => {
     const alarm = alarms.value.find((a) => a.id === id)
     if (!alarm) return
@@ -226,6 +234,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
                 onToggle={handleToggle}
                 onEdit={handleEdit}
                 onConfirm={handleConfirm}
+                onUnconfirm={handleUnconfirm}
               />
             )}
           />
