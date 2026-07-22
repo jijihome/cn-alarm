@@ -65,19 +65,21 @@ export function AlarmRow({ alarm, onToggle, onEdit, onConfirm, onUnconfirm }: Al
       value={alarm.enabled}
       onChanged={handleToggle}
     >
-      <HStack alignment="center" spacing={8}
+      <VStack alignment="leading" spacing={2} onTapGesture={() => onEdit(alarm.id)}
         leadingSwipeActions={leadingActions}
       >
-        <Image
-          systemName={MODE_ICONS[alarm.repeat.mode] || "alarm"}
-          foregroundStyle={alarm.tintColor as any}
-          imageScale="medium"
-        />
-        <VStack alignment="leading" spacing={2} onTapGesture={() => onEdit(alarm.id)}>
+        <HStack alignment="center" spacing={6}>
+          <Image
+            systemName={MODE_ICONS[alarm.repeat.mode] || "alarm"}
+            foregroundStyle={alarm.tintColor as any}
+            imageScale="small"
+          />
           <HStack alignment="firstTextBaseline" spacing={8}>
-            <Text font={28} fontWeight="bold">{timeStr}</Text>
-            <Text font={20} foregroundStyle="secondaryLabel">{alarm.title}{alarm.tag ? ` · ${alarm.tag}` : ""}</Text>
+            <Text font={22} fontWeight="bold">{timeStr}</Text>
+            <Text font={16} foregroundStyle="secondaryLabel">{alarm.title}</Text>
           </HStack>
+        </HStack>
+        {(alarm.tag || alarm.note) ? <HStack spacing={4}><Text font={13} foregroundStyle="tertiaryLabel">{[alarm.tag, alarm.note].filter(Boolean).join(" · ")}</Text></HStack> : null}
           <Text font={14} foregroundStyle="secondaryLabel">{desc}</Text>
           {(alarm.reminderTimes && alarm.reminderTimes.length > 0) && (
             <Text font={12} foregroundStyle="tertiaryLabel">{timePointsStr}</Text>
@@ -91,7 +93,6 @@ export function AlarmRow({ alarm, onToggle, onEdit, onConfirm, onUnconfirm }: Al
             <Text font={12} foregroundStyle="systemGreen">今日已全部确认</Text>
           )}
         </VStack>
-      </HStack>
     </Toggle>
   )
 }
