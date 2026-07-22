@@ -1,5 +1,5 @@
 // AddCreditCard.tsx - 添加/编辑信用卡页
-import { useObservable, NavigationStack, List, Section, Text, Picker, TextField, Button, Stepper, Toggle, DatePicker, Navigation, useState, HStack, Spacer } from "scripting"
+import { useObservable, NavigationStack, List, Section, Text, Picker, TextField, Button, Stepper, Toggle, DatePicker, Navigation, useState, HStack, VStack, Spacer } from "scripting"
 import { CreditCard, BANK_PRESETS, ReminderTypeConfig } from "../lib/constants"
 import { createCardSync, updateCard, removeCardSync, syncCardAlarmsById, cancelCardAlarmsById, getCardById } from "../lib/credit-card"
 
@@ -222,22 +222,22 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
           </Stepper>
         </Section>
 
-        <Section header={<Text>提醒类型</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">选择需要提醒的日期和具体时间，关闭的不会生成闹钟</Text>}>
+        <Section header={<Text>提醒类型</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">点击时间可修改提醒时刻，关闭的不会生成闹钟</Text>}>
           <Toggle title="账单已出" value={stmEnabled} />
           {stmEnabled.value && (
-            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={stmTime} datePickerStyle="wheel" />
+            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={stmTime} datePickerStyle="compact" />
           )}
           <Toggle title={`提前${remindDaysBefore.value}天提醒`} value={advEnabled} />
           {advEnabled.value && (
-            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={advTime} datePickerStyle="wheel" />
+            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={advTime} datePickerStyle="compact" />
           )}
           <Toggle title="还款截止日" value={dueEnabled} />
           {dueEnabled.value && (
-            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={dueTime} datePickerStyle="wheel" />
+            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={dueTime} datePickerStyle="compact" />
           )}
           <Toggle title="宽限期最后一天" value={bufEnabled} />
           {bufEnabled.value && (
-            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={bufTime} datePickerStyle="wheel" />
+            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={bufTime} datePickerStyle="compact" />
           )}
         </Section>
 
