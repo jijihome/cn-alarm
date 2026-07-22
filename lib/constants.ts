@@ -27,6 +27,12 @@ export type HolidayAction = "none" | "skip" | "defer"
 /** 未确认重试提醒的类型 */
 export type RetryType = "alarm" | "notification"
 
+/** 闹钟列表排序维度 */
+export type AlarmSortKey = "time" | "name" | "enabled" | "created" | "group"
+
+/** 信用卡列表排序维度 */
+export type CardSortKey = "bank" | "dueDate" | "statementDay" | "enabled"
+
 /** 未确认重试配置 */
 export interface RetryConfig {
   enabled: boolean
@@ -169,6 +175,14 @@ export interface AppSettings {
   defaultRemindDaysBefore: number
   /** 后台保活：app 切后台时请求 keepAlive，回前台时 stop */
   backgroundKeepAlive: boolean
+  /** 闹钟列表排序方式，默认 time */
+  alarmSortBy?: AlarmSortKey
+  /** 闹钟列表升序（true=升序，false=降序），默认 true */
+  alarmSortAsc?: boolean
+  /** 信用卡列表排序方式，默认 bank */
+  cardSortBy?: CardSortKey
+  /** 信用卡列表升序，默认 true */
+  cardSortAsc?: boolean
 }
 
 // ==================== 默认分组 ====================
@@ -189,6 +203,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultSound: "default",
   defaultRemindDaysBefore: 3,
   backgroundKeepAlive: false,
+  alarmSortBy: "time",
+  alarmSortAsc: true,
+  cardSortBy: "bank",
+  cardSortAsc: true,
 }
 
 // ==================== 银行预设 ====================

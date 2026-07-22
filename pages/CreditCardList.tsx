@@ -1,7 +1,9 @@
 // CreditCardList.tsx - 信用卡列表页
 import { useState, useObservable, NavigationStack, List, Section, Text, ForEach, Button, HStack, VStack, Toggle, ContentUnavailableView, Navigation, useEffect } from "scripting"
-import { CreditCard } from "../lib/constants"
+import { CreditCard, CardSortKey } from "../lib/constants"
 import { loadCards, updateCard, getNextDueDate, formatDateCN, syncCardAlarmsById, cancelCardAlarmsById, getCardUnconfirmedCount, confirmCardReminders, unconfirmCardReminders } from "../lib/credit-card"
+import { sortCards, CARD_SORT_OPTIONS, cardSortTitle } from "../lib/sort"
+import { loadSettings, saveSettings } from "../lib/alarm-store"
 import { AddCreditCard } from "./AddCreditCard"
 import { Settings } from "./Settings"
 
@@ -34,9 +36,9 @@ function reminderSummary(card: CreditCard): string {
   return summary
 }
 
-/** 按银行名拼音排序加载信用卡 */
-const loadSortedCards = (): CreditCard[] =>
-  loadCards().sort((a, b) => a.bankName.localeCompare(b.bankName, "zh"))
+/** 按指定维度和方向排序加载信用卡 */
+const loadSortedCards = (sortBy: CardSortKey, ascending: boolean): CreditCard[] =>
+  sortCards(loadCards(), sortBy, ascending)
 
 function CardRow({ card, onEdit, onToggle, onConfirm, onUnconfirm }: { card: CreditCard; onEdit: (id: string) => void; onToggle: (id: string, enabled: boolean) => void; onConfirm: (card: CreditCard) => void; onUnconfirm: (card: CreditCard) => void }) {
   const nextDue = getNextDueDate(card)
@@ -94,15 +96,43 @@ function CardRow({ card, onEdit, onToggle, onConfirm, onUnconfirm }: { card: Cre
 }
 
 export function CreditCardList({ selection }: { selection: Observable<number> }) {
-  const cards = useObservable<CreditCard[]>(() => loadSortedCards())
+  // 从设置读取排序偏好
+  const currentSort = useObservable<CardSortKey>(() => loadSettings().cardSortBy ?? "bank")
+  const sortAsc = useObservable<boolean>(() => loadSettings().cardSortAsc ?? true)
+  const cards = useObservable<CreditCard[]>(() => loadSortedCards(currentSort.value, sortAsc.value))
   // toast 状态
   const [toastMsg, setToastMsg] = useState("")
   const [toastShown, setToastShown] = useState(false)
 
+  // 排序对话框状态
+  const sortShown = useObservable<boolean>(() => false)
+
+  // 执行排序切换（维度）
+  const applySort = (key: CardSortKey) => {
+    const opt = CARD_SORT_OPTIONS.find(o => o.key === key)
+    const newAsc = opt?.reversible ? (opt.defaultAsc) : (opt?.defaultAsc ?? true)
+    currentSort.setValue(key)
+    sortAsc.setValue(newAsc)
+    const settings = loadSettings()
+    saveSettings({ ...settings, cardSortBy: key, cardSortAsc: newAsc })
+    cards.setValue(loadSortedCards(key, newAsc))
+  }
+
+  // 切换排序方向
+  const toggleSortDir = () => {
+    const opt = CARD_SORT_OPTIONS.find(o => o.key === currentSort.value)
+    if (!opt?.reversible) return
+    const newAsc = !sortAsc.value
+    sortAsc.setValue(newAsc)
+    const settings = loadSettings()
+    saveSettings({ ...settings, cardSortAsc: newAsc })
+    cards.setValue(loadSortedCards(currentSort.value, newAsc))
+  }
+
   // 监听 Tab 切换：切回信用卡 Tab 时重新加载
   useEffect(() => {
     if (selection.value === 1) {
-      cards.setValue(loadSortedCards())
+      cards.setValue(loadSortedCards(currentSort.value, sortAsc.value))
     }
   }, [selection.value])
 
@@ -117,15 +147,15 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
         cancelCardAlarmsById(result.cardId).catch(() => {})
         setToastMsg("信用卡已删除")
         setToastShown(true)
-        cards.setValue(loadSortedCards())
+        cards.setValue(loadSortedCards(currentSort.value, sortAsc.value))
       } else if (result?.saved && result?.cardId) {
         // 先刷新列表显示新卡，再异步同步闹钟
-        cards.setValue(loadSortedCards())
+        cards.setValue(loadSortedCards(currentSort.value, sortAsc.value))
         syncCardAlarmsById(result.cardId)
           .then(() => {
             setToastMsg(editId ? "信用卡已更新并同步闹钟" : "信用卡已添加并同步闹钟")
             setToastShown(true)
-            cards.setValue(loadSortedCards())
+            cards.setValue(loadSortedCards(currentSort.value, sortAsc.value))
           })
           .catch(() => {
             setToastMsg("信用卡已保存，但闹钟同步失败")
@@ -143,7 +173,7 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
     confirmCardReminders(card)
     setToastMsg(`已确认: ${card.bankName} 尾号${card.last4Digits}`)
     setToastShown(true)
-    cards.setValue(loadSortedCards())
+    cards.setValue(loadSortedCards(currentSort.value, sortAsc.value))
   }
 
   // 取消确认：恢复为待确认状态
@@ -151,20 +181,20 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
     unconfirmCardReminders(card)
     setToastMsg(`已取消确认: ${card.bankName} 尾号${card.last4Digits}`)
     setToastShown(true)
-    cards.setValue(loadSortedCards())
+    cards.setValue(loadSortedCards(currentSort.value, sortAsc.value))
   }
 
   const handleToggle = (id: string, enabled: boolean) => {
     // 先同步更新本地状态
     updateCard(id, { enabled })
-    cards.setValue(loadSortedCards())
+    cards.setValue(loadSortedCards(currentSort.value, sortAsc.value))
     if (enabled) {
       // 启用：异步同步闹钟
       syncCardAlarmsById(id)
         .then(() => {
           setToastMsg("信用卡已启用，闹钟已同步")
           setToastShown(true)
-          cards.setValue(loadSortedCards())
+          cards.setValue(loadSortedCards(currentSort.value, sortAsc.value))
         })
         .catch(() => {
           setToastMsg("信用卡已启用，但闹钟同步失败")
@@ -176,7 +206,7 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
         .then(() => {
           setToastMsg("信用卡已停用")
           setToastShown(true)
-          cards.setValue(loadSortedCards())
+          cards.setValue(loadSortedCards(currentSort.value, sortAsc.value))
         })
         .catch(() => {
           setToastMsg("信用卡已停用")
@@ -193,6 +223,8 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
           topBarTrailing: (
             <HStack spacing={0}>
               <Button title="" systemImage="gearshape" action={presentSettings} />
+              <Button title="" systemImage="arrow.up.arrow.down" action={() => sortShown.setValue(true)} />
+              <Button title="" systemImage={sortAsc.value ? "chevron.up" : "chevron.down"} action={toggleSortDir} />
               <Button title="添加" systemImage="plus" action={handleAdd} />
             </HStack>
           ),
@@ -201,6 +233,13 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
           message: toastMsg,
           isPresented: toastShown,
           onChanged: setToastShown,
+        }}
+        confirmationDialog={{
+          title: "排序方式",
+          isPresented: sortShown,
+          actions: <>{CARD_SORT_OPTIONS.map(o =>
+            <Button key={o.key} title={o.key === currentSort.value ? `✓ ${cardSortTitle(o.key, sortAsc.value)}` : cardSortTitle(o.key, sortAsc.value)} action={() => applySort(o.key)} />
+          )}</>,
         }}
       >
         {cards.value.length === 0 ? (

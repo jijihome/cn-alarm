@@ -1,9 +1,10 @@
 // AlarmList.tsx - 闹钟列表页
 import { useState, useObservable, NavigationStack, List, Section, Text, Button, EditButton, ContentUnavailableView, VStack, HStack, Navigation, ForEach, useEffect } from "scripting"
-import { AlarmItem } from "../lib/constants"
-import { loadAlarms, saveAlarms, updateAlarm, confirmReminder, unconfirmAllReminders, isReminderConfirmed, getUnconfirmedTimes, makeConfirmKey } from "../lib/alarm-store"
+import { AlarmItem, AlarmSortKey } from "../lib/constants"
+import { loadAlarms, saveAlarms, updateAlarm, confirmReminder, unconfirmAllReminders, isReminderConfirmed, getUnconfirmedTimes, makeConfirmKey, loadSettings, saveSettings } from "../lib/alarm-store"
 import { getNextAlarmFromList, formatCountdown, formatRepeatDescription } from "../lib/scheduler"
 import { scheduleAlarm, cancelAlarm, cancelAllAlarms, cancelRetryAlarms, ScheduleResult } from "../lib/alarm-bridge"
+import { sortAlarms, ALARM_SORT_OPTIONS, alarmSortTitle } from "../lib/sort"
 import { AlarmRow } from "../components/AlarmRow"
 import { AddAlarm } from "./AddAlarm"
 import { Settings } from "./Settings"
@@ -12,9 +13,9 @@ import { Settings } from "./Settings"
 const presentSettings = () =>
   Navigation.present({ element: <Settings />, modalPresentationStyle: "pageSheet" })
 
-/** 加载用户闹钟（排除信用卡自动闹钟） */
-const loadUserAlarms = (): AlarmItem[] =>
-  loadAlarms().filter((a) => a.source !== "credit_card")
+/** 加载并排序用户闹钟 */
+const loadSortedUserAlarms = (sortBy: AlarmSortKey, ascending: boolean): AlarmItem[] =>
+  sortAlarms(loadAlarms().filter((a) => a.source !== "credit_card"), sortBy, ascending)
 
 function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
   // 倒计时定时器：每秒刷新（setTimeout 递归模拟 setInterval）
@@ -60,15 +61,45 @@ function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
 }
 
 export function AlarmList({ selection }: { selection: Observable<number> }) {
-  const alarms = useObservable<AlarmItem[]>(() => loadUserAlarms())
+  // 从设置读取排序偏好
+  const currentSort = useObservable<AlarmSortKey>(() => loadSettings().alarmSortBy ?? "time")
+  const sortAsc = useObservable<boolean>(() => loadSettings().alarmSortAsc ?? true)
+  const alarms = useObservable<AlarmItem[]>(() => loadSortedUserAlarms(currentSort.value, sortAsc.value))
   // toast 状态
   const [toastMsg, setToastMsg] = useState("")
   const [toastShown, setToastShown] = useState(false)
 
+  // 排序对话框状态
+  const sortShown = useObservable<boolean>(() => false)
+
+  // 执行排序切换（维度）
+  const applySort = (key: AlarmSortKey) => {
+    // 切换维度时，根据新维度的默认方向设置
+    const opt = ALARM_SORT_OPTIONS.find(o => o.key === key)
+    const newAsc = opt?.reversible ? (opt.defaultAsc) : (opt?.defaultAsc ?? true)
+    currentSort.setValue(key)
+    sortAsc.setValue(newAsc)
+    const settings = loadSettings()
+    saveSettings({ ...settings, alarmSortBy: key, alarmSortAsc: newAsc })
+    alarms.setValue(loadSortedUserAlarms(key, newAsc))
+  }
+
+  // 切换排序方向
+  const toggleSortDir = () => {
+    const opt = ALARM_SORT_OPTIONS.find(o => o.key === currentSort.value)
+    // 不支持方向切换的维度（如 enabled）不处理
+    if (!opt?.reversible) return
+    const newAsc = !sortAsc.value
+    sortAsc.setValue(newAsc)
+    const settings = loadSettings()
+    saveSettings({ ...settings, alarmSortAsc: newAsc })
+    alarms.setValue(loadSortedUserAlarms(currentSort.value, newAsc))
+  }
+
   // 监听 Tab 切换：切回闹钟 Tab 时重新加载（其他页面可能改了调休/分类/闹钟数据）
   useEffect(() => {
     if (selection.value === 0) {
-      alarms.setValue(loadUserAlarms())
+      alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
     }
   }, [selection.value])
 
@@ -81,7 +112,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
     const deletedIds = prevIds.filter(id => !currentIds.has(id))
     if (deletedIds.length > 0) {
       // 取消被删闹钟的全部系统闹钟+重试提醒
-      const oldAlarms = loadUserAlarms()
+      const oldAlarms = loadSortedUserAlarms(currentSort.value, sortAsc.value)
       for (const delId of deletedIds) {
         const oldAlarm = oldAlarms.find(a => a.id === delId)
         if (oldAlarm) {
@@ -107,11 +138,11 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
     }).then((result: any) => {
       // 只有真正保存才处理调度和 toast
       if (result?.saved && result?.alarmId) {
-        const alarm = loadUserAlarms().find(a => a.id === result.alarmId)
+        const alarm = loadSortedUserAlarms(currentSort.value, sortAsc.value).find(a => a.id === result.alarmId)
         if (alarm && alarm.enabled) {
           // 先取消旧的系统闹钟+重试（编辑场景）
           if (alarm.alarmIds.length > 0) {
-            cancelAllAlarms(loadUserAlarms().find(a => a.id === result.alarmId) ?? alarm).catch(() => {})
+            cancelAllAlarms(loadSortedUserAlarms(currentSort.value, sortAsc.value).find(a => a.id === result.alarmId) ?? alarm).catch(() => {})
           }
           // 重新调度系统闹钟
           scheduleAlarm(alarm).then((result: ScheduleResult | null) => {
@@ -122,14 +153,14 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
               setToastMsg("闹钟已保存，但系统调度失败")
             }
             setToastShown(true)
-            alarms.setValue(loadUserAlarms())
+            alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
           })
         } else {
           setToastMsg(editId ? "闹钟已更新" : "闹钟已添加")
           setToastShown(true)
         }
       }
-      alarms.setValue(loadUserAlarms())
+      alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
     })
   }
 
@@ -171,7 +202,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
       cancelRetryAlarms(alarm).catch(() => {})
     }
     setToastShown(true)
-    alarms.setValue(loadUserAlarms())
+    alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
   }
 
   const handleUnconfirm = (alarm: AlarmItem) => {
@@ -179,7 +210,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
     unconfirmAllReminders(alarm.id, today)
     setToastMsg(`已取消确认: ${alarm.title}`)
     setToastShown(true)
-    alarms.setValue(loadUserAlarms())
+    alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
   }
 
   const handleToggle = (id: string, enabled: boolean) => {
@@ -189,7 +220,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
     if (enabled) {
       // 启用：先立即更新本地状态，再异步创建系统闹钟
       updateAlarm(id, { enabled: true, alarmIds: [], retryAlarmIds: [] })
-      alarms.setValue(loadUserAlarms())
+      alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
       scheduleAlarm(alarm).then((result: ScheduleResult | null) => {
         if (result) {
           updateAlarm(id, { alarmIds: result.allAlarmIds, retryAlarmIds: result.retryIds })
@@ -201,13 +232,13 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
           setToastMsg("系统提醒创建失败，闹钟未启用")
           setToastShown(true)
         }
-        alarms.setValue(loadUserAlarms())
+        alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
       })
     } else {
       // 停用：先立即更新本地状态，再异步取消全部闹钟+重试
-      const oldAlarm = loadUserAlarms().find(a => a.id === id) ?? alarm
+      const oldAlarm = loadSortedUserAlarms(currentSort.value, sortAsc.value).find(a => a.id === id) ?? alarm
       updateAlarm(id, { enabled: false, alarmIds: [], retryAlarmIds: [] })
-      alarms.setValue(loadUserAlarms())
+      alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
       setToastMsg("闹钟已停用")
       setToastShown(true)
       // 异步取消全部闹钟+重试（fire-and-forget）
@@ -224,6 +255,8 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
           topBarTrailing: (
             <HStack spacing={0}>
               <Button title="" systemImage="gearshape" action={presentSettings} />
+              <Button title="" systemImage="arrow.up.arrow.down" action={() => sortShown.setValue(true)} />
+              <Button title="" systemImage={sortAsc.value ? "chevron.up" : "chevron.down"} action={toggleSortDir} />
               <Button title="添加" systemImage="plus" action={handleAdd} />
             </HStack>
           ),
@@ -232,6 +265,13 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
           message: toastMsg,
           isPresented: toastShown,
           onChanged: setToastShown,
+        }}
+        confirmationDialog={{
+          title: "排序方式",
+          isPresented: sortShown,
+          actions: <>{ALARM_SORT_OPTIONS.map(o =>
+            <Button key={o.key} title={o.key === currentSort.value ? `✓ ${alarmSortTitle(o.key, sortAsc.value)}` : alarmSortTitle(o.key, sortAsc.value)} action={() => applySort(o.key)} />
+          )}</>,
         }}
       >
         <Section>
