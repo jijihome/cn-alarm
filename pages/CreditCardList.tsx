@@ -67,8 +67,9 @@ function CardRow({ card, onEdit, onToggle, onConfirm, onUnconfirm }: { card: Cre
         leadingSwipeActions={leadingActions}
       >
         <HStack alignment="center" spacing={8}>
-          <Text font={16} fontWeight="bold">{card.bankName}</Text>
-          <Text font={13} foregroundStyle="secondaryLabel">尾号{card.last4Digits}</Text>
+          <Text font={14} foregroundStyle={card.tintColor as any}>●</Text>
+          <Text font={20} fontWeight="bold">{card.bankName}</Text>
+          <Text font={16} foregroundStyle="secondaryLabel">尾号{card.last4Digits}</Text>
         </HStack>
         <HStack spacing={12}>
           <Text font={13} foregroundStyle="secondaryLabel">账单日{card.statementDay}号</Text>
