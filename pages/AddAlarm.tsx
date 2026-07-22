@@ -54,29 +54,26 @@ export function AddAlarm({ editId }: AddAlarmProps) {
   const defaults = existing ? null : loadSettings()
   const gradualWake = useObservable(existing?.gradualWake ?? defaults?.defaultGradualWake ?? false)
 
-  // 时间
-  const initialDate = new Date()
-  initialDate.setHours(existing?.hour ?? 7, existing?.minute ?? 0, 0, 0)
-  const timeValue = useObservable(initialDate)
+  // 所有提醒时间点（统一列表，每项含 id + hour + minute）
+  // 第一个元素对应 AlarmItem.hour/minute，其余对应 reminderTimes
+  const allTimes = useObservable<{ id: string; hour: number; minute: number }[]>(() => {
+    const main = { id: "main", hour: existing?.hour ?? 7, minute: existing?.minute ?? 0 }
+    if (existing?.reminderTimes && existing.reminderTimes.length > 0) {
+      const extras = existing.reminderTimes.map((t, i) => ({ id: `t${i}`, hour: t.hour, minute: t.minute }))
+      const all = [main, ...extras]
+      all.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute))
+      return all
+    }
+    return [main]
+  })
 
   // 重复规则：RepeatSettings 自管状态，通过 rule Observable 读最新值
   const repeatRule = useObservable<RepeatRule>(existing?.repeat ?? DEFAULT_REPEAT_RULE)
 
-  // 多时间点提醒（额外时间点，主时间点仍是 hour/minute）
-  // ForEach 要求元素有 id 字段
-  const reminderTimes = useObservable<{ id: string; hour: number; minute: number }[]>(
-    existing?.reminderTimes ? existing.reminderTimes.map((t, i) => ({ id: `t${i}`, ...t })) : []
-  )
   // 重试配置
   const retryConfig = useObservable<RetryConfig>(
     existing?.retryConfig ? { ...existing.retryConfig } : { ...DEFAULT_RETRY_CONFIG }
   )
-  // 新增时间点用的 DatePicker
-  const newTimeValue = useObservable<Date>(() => {
-    const d = new Date()
-    d.setHours(12, 0, 0, 0)
-    return d
-  })
 
   // 提前提醒（秒）
   const preAlertSeconds = useObservable(existing?.preAlertSeconds ?? defaults?.defaultPreAlert ?? 300)
@@ -88,10 +85,15 @@ export function AddAlarm({ editId }: AddAlarmProps) {
       return
     }
 
+    // 从 allTimes 提取主时间 + 额外时间（已排序）
+    const sorted = [...allTimes.value].sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute))
+    const mainTime = sorted[0] ?? { hour: 7, minute: 0 }
+    const extraTimes = sorted.slice(1).map(t => ({ hour: t.hour, minute: t.minute }))
+
     const alarmData: Partial<AlarmItem> = {
       title: title.value,
-      hour: timeValue.value.getHours(),
-      minute: timeValue.value.getMinutes(),
+      hour: mainTime.hour,
+      minute: mainTime.minute,
       repeat: repeatRule.value,
       gradualWake: gradualWake.value,
       preAlertSeconds: preAlertSeconds.value,
@@ -99,7 +101,7 @@ export function AddAlarm({ editId }: AddAlarmProps) {
       tag: tag.value,
       note: note.value,
       tintColor: tintColor.value,
-      reminderTimes: reminderTimes.value.map(({ hour, minute }) => ({ hour, minute })),
+      reminderTimes: extraTimes,
       retryConfig: retryConfig.value,
     }
 
@@ -132,12 +134,54 @@ export function AddAlarm({ editId }: AddAlarmProps) {
           onChanged: setToastShown,
         }}
       >
-        <Section header={<Text>时间</Text>}>
-          <DatePicker
-            title="闹钟时间"
-            displayedComponents={["hourAndMinute"]}
-            value={timeValue}
-            datePickerStyle="wheel"
+        <Section
+          header={<Text>提醒时间</Text>}
+          footer={<Text font="footnote" foregroundStyle="systemGray">可添加多个时间点，如吃药、喝水等多次提醒。每个时间点独立响铃。</Text>}
+        >
+          <ForEach
+            data={allTimes}
+            builder={(item: { id: string; hour: number; minute: number }) => {
+              const date = new Date()
+              date.setHours(item.hour, item.minute, 0, 0)
+              const timestamp = date.getTime()
+              return (
+                <HStack key={item.id} alignment="center" spacing={8}>
+                  <DatePicker
+                    title=""
+                    displayedComponents={["hourAndMinute"]}
+                    value={timestamp}
+                    datePickerStyle="compact"
+                    onChanged={(ts: number) => {
+                      const d = new Date(ts)
+                      const next = allTimes.value.map(t =>
+                        t.id === item.id
+                          ? { ...t, hour: d.getHours(), minute: d.getMinutes() }
+                          : t
+                      )
+                      allTimes.setValue(next)
+                    }}
+                  />
+                  {allTimes.value.length > 1 && (
+                    <Button
+                      title="删除"
+                      systemImage="minus.circle.fill"
+                      action={() => {
+                        const next = allTimes.value.filter(t => t.id !== item.id)
+                        allTimes.setValue(next)
+                      }}
+                    />
+                  )}
+                </HStack>
+              )
+            }}
+          />
+          <Button
+            title="添加时间点"
+            systemImage="plus.circle.fill"
+            action={() => {
+              const id = `t${Date.now()}`
+              allTimes.setValue([...allTimes.value, { id, hour: 12, minute: 0 }])
+            }}
           />
         </Section>
 
@@ -159,56 +203,6 @@ export function AddAlarm({ editId }: AddAlarmProps) {
                 <Text foregroundStyle="secondaryLabel">{Math.floor(preAlertSeconds.value / 60)} 分钟</Text>
               </HStack>
             </Stepper>
-          )}
-        </Section>
-
-        <Section
-          header={<Text>多时间点提醒</Text>}
-          footer={<Text font="footnote" foregroundStyle="systemGray">主时间点在上方设置。这里添加当天额外提醒时间点，如吃药、喝水等多次提醒。</Text>}
-        >
-          <HStack alignment="center" spacing={8}>
-            <DatePicker
-              title="新增时间"
-              displayedComponents={["hourAndMinute"]}
-              value={newTimeValue}
-              datePickerStyle="compact"
-            />
-            <Spacer />
-            <Button
-              title="添加"
-              systemImage="plus.circle.fill"
-              action={() => {
-                const id = `t${Date.now()}`
-                const hour = newTimeValue.value.getHours()
-                const minute = newTimeValue.value.getMinutes()
-                const next = [...reminderTimes.value, { id, hour, minute }]
-                next.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute))
-                reminderTimes.setValue(next)
-              }}
-            />
-          </HStack>
-          {reminderTimes.value.length > 0 ? (
-            <ForEach
-              data={reminderTimes}
-              builder={(t: { id: string; hour: number; minute: number }) => (
-                <HStack key={t.id} alignment="center" spacing={12}>
-                  <Text font="body">
-                    {String(t.hour).padStart(2, "0")}:{String(t.minute).padStart(2, "0")}
-                  </Text>
-                  <Spacer />
-                  <Button
-                    title="删除"
-                    systemImage="minus.circle.fill"
-                    action={() => {
-                      const next = reminderTimes.value.filter(item => item.id !== t.id)
-                      reminderTimes.setValue(next)
-                    }}
-                  />
-                </HStack>
-              )}
-            />
-          ) : (
-            <Text foregroundStyle="secondaryLabel">无额外时间点</Text>
           )}
         </Section>
 
