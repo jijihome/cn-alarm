@@ -1,5 +1,5 @@
 // CreditCardList.tsx - 信用卡列表页
-import { useState, useObservable, NavigationStack, List, Section, Text, ForEach, Button, HStack, VStack, Toggle, ContentUnavailableView, Navigation, useEffect, EditButton } from "scripting"
+import { useState, useObservable, NavigationStack, List, Section, Text, ForEach, Button, HStack, VStack, Toggle, ContentUnavailableView, Navigation, useEffect } from "scripting"
 import { CreditCard, CardSortKey } from "../lib/constants"
 import { loadCards, updateCard, getNextDueDate, formatDateCN, syncCardAlarmsById, cancelCardAlarmsById, getCardUnconfirmedCount, confirmCardReminders, unconfirmCardReminders, removeCardSync } from "../lib/credit-card"
 import { sortCards, CARD_SORT_OPTIONS } from "../lib/sort"
@@ -105,6 +105,7 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
   const [toastShown, setToastShown] = useState(false)
 
   // 排序对话框状态
+  const editMode = useObservable(() => EditMode.inactive())
   const sortShown = useObservable<boolean>(() => false)
 
   // 执行排序切换（维度）
@@ -249,8 +250,8 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
         toolbar={{
           topBarLeading: (
             <HStack spacing={0}>
-              <EditButton />
-              <Button title="添加" systemImage="plus" action={handleAdd} />
+              <Button title="" systemImage={editMode.value.isEditing ? "checkmark.circle" : "pencil.circle"} action={() => editMode.setValue(editMode.value.isEditing ? EditMode.inactive() : EditMode.active())} />
+              <Button title="" systemImage="plus" action={handleAdd} />
             </HStack>
           ),
           topBarTrailing: (
@@ -261,6 +262,7 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
             </HStack>
           ),
         }}
+        environments={{ editMode }}
         toast={{
           message: toastMsg,
           isPresented: toastShown,

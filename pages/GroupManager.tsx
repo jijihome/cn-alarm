@@ -1,5 +1,5 @@
 // GroupManager.tsx - 分类管理页（增删改，快捷指令风格图标/颜色选择）
-import { useState, useObservable, NavigationStack, List, Section, Text, Button, HStack, Spacer, TextField, Navigation, EditButton, ForEach, ContentUnavailableView, Image, Circle, LazyVGrid, VStack, ZStack, RoundedRectangle, useEffect } from "scripting"
+import { useState, useObservable, NavigationStack, List, Section, Text, Button, HStack, Spacer, TextField, Navigation, ForEach, ContentUnavailableView, Image, Circle, LazyVGrid, VStack, ZStack, RoundedRectangle, useEffect } from "scripting"
 import { AlarmGroup } from "../lib/constants"
 import { loadGroups, saveGroups, addGroup, updateGroup, removeGroup, createGroup } from "../lib/alarm-store"
 import { COLOR_OPTIONS, ICON_CATEGORIES, ALL_ICONS } from "../lib/icon-data"
@@ -186,6 +186,8 @@ function GroupEditor({ editId }: { editId?: string }) {
 }
 
 export function GroupManager() {
+  const dismiss = Navigation.useDismiss()
+  const editMode = useObservable(() => EditMode.inactive())
   const groups = useObservable<AlarmGroup[]>(() => loadGroups())
 
   // toast 状态
@@ -233,9 +235,15 @@ export function GroupManager() {
       <List
         navigationTitle="分类管理"
         listStyle="insetGroup"
+        environments={{ editMode }}
         toolbar={{
-          topBarLeading: <EditButton />,
-          topBarTrailing: <Button title="添加" systemImage="plus" action={handleAdd} />,
+          topBarLeading: (
+            <HStack spacing={0}>
+              <Button title="" systemImage={editMode.value.isEditing ? "checkmark.circle" : "pencil.circle"} action={() => editMode.setValue(editMode.value.isEditing ? EditMode.inactive() : EditMode.active())} />
+              <Button title="" systemImage="plus" action={handleAdd} />
+            </HStack>
+          ),
+          topBarTrailing: <Button title="" systemImage="xmark" action={() => dismiss()} />,
         }}
         toast={{
           message: toastMsg,
@@ -259,7 +267,7 @@ export function GroupManager() {
               builder={(g: AlarmGroup) => (
                 <Button
                   key={g.id}
-                  action={() => handleEdit(g.id)}
+                  action={() => { if (!editMode.value.isEditing) handleEdit(g.id) }}
                 >
                   <HStack alignment="center" spacing={10}>
                     <Image systemName={g.icon} foregroundStyle={g.tintColor as any} frame={{ width: 20, height: 20 }} />

@@ -37,7 +37,7 @@ export function Settings() {
 
   // 导航到子页面，返回后刷新数据
   const presentPage = (element: JSX.Element) => {
-    Navigation.present({ element, modalPresentationStyle: "fullScreen" }).then(() => {
+    Navigation.present({ element, modalPresentationStyle: "pageSheet" }).then(() => {
       holidays.setValue(loadHolidays())
       groupCount.setValue(loadGroups().length)
     })

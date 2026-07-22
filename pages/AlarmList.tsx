@@ -1,5 +1,5 @@
 // AlarmList.tsx - 闹钟列表页
-import { useState, useObservable, NavigationStack, List, Section, Text, Button, EditButton, ContentUnavailableView, VStack, HStack, Navigation, ForEach, useEffect } from "scripting"
+import { useState, useObservable, NavigationStack, List, Section, Text, Button, ContentUnavailableView, VStack, HStack, Navigation, ForEach, useEffect } from "scripting"
 import { AlarmItem, AlarmSortKey } from "../lib/constants"
 import { loadAlarms, saveAlarms, updateAlarm, confirmReminder, unconfirmAllReminders, isReminderConfirmed, getUnconfirmedTimes, makeConfirmKey, loadSettings, saveSettings } from "../lib/alarm-store"
 import { getNextAlarmFromList, formatCountdown, formatRepeatDescription } from "../lib/scheduler"
@@ -70,6 +70,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
   const [toastShown, setToastShown] = useState(false)
 
   // 排序对话框状态
+  const editMode = useObservable(() => EditMode.inactive())
   const sortShown = useObservable<boolean>(() => false)
 
   // 执行排序切换（维度）
@@ -261,8 +262,8 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
         toolbar={{
           topBarLeading: (
             <HStack spacing={0}>
-              <EditButton />
-              <Button title="添加" systemImage="plus" action={handleAdd} />
+              <Button title="" systemImage={editMode.value.isEditing ? "checkmark.circle" : "pencil.circle"} action={() => editMode.setValue(editMode.value.isEditing ? EditMode.inactive() : EditMode.active())} />
+              <Button title="" systemImage="plus" action={handleAdd} />
             </HStack>
           ),
           topBarTrailing: (
@@ -273,6 +274,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
             </HStack>
           ),
         }}
+        environments={{ editMode }}
         toast={{
           message: toastMsg,
           isPresented: toastShown,
