@@ -2,6 +2,7 @@
 import { Script, Navigation, TabView, Tab, useObservable } from "scripting"
 import { AlarmList } from "./pages/AlarmList"
 import { CreditCardList } from "./pages/CreditCardList"
+import { SearchView } from "./pages/SearchView"
 import { initializeDefaults, loadSettings } from "./lib/alarm-store"
 
 function RootView() {
@@ -9,12 +10,23 @@ function RootView() {
   const selection = useObservable<number>(0)
 
   return (
-    <TabView selection={selection}>
+    <TabView
+      selection={selection}
+      tabViewSearchActivation="searchTabSelection"
+    >
       <Tab title="闹钟" systemImage="alarm.fill" value={0}>
         <AlarmList selection={selection} />
       </Tab>
       <Tab title="信用卡" systemImage="creditcard.fill" value={1}>
         <CreditCardList selection={selection} />
+      </Tab>
+      <Tab
+        title="搜索"
+        systemImage="magnifyingglass"
+        value={2}
+        role="search"
+      >
+        <SearchView />
       </Tab>
     </TabView>
   )
