@@ -1,9 +1,9 @@
 // AlarmList.tsx - 闹钟列表页
 import { useState, useObservable, NavigationStack, List, Section, Text, Button, EditButton, ContentUnavailableView, VStack, HStack, Navigation, ForEach, useEffect } from "scripting"
 import { AlarmItem } from "../lib/constants"
-import { loadAlarms, saveAlarms, updateAlarm } from "../lib/alarm-store"
+import { loadAlarms, saveAlarms, updateAlarm, confirmReminder, isReminderConfirmed, getUnconfirmedTimes, makeConfirmKey } from "../lib/alarm-store"
 import { getNextAlarmFromList, formatCountdown, formatRepeatDescription } from "../lib/scheduler"
-import { scheduleAlarm, cancelAlarm } from "../lib/alarm-bridge"
+import { scheduleAlarm, cancelAlarm, cancelAllAlarms, cancelRetryAlarms, ScheduleResult } from "../lib/alarm-bridge"
 import { AlarmRow } from "../components/AlarmRow"
 import { AddAlarm } from "./AddAlarm"
 import { Settings } from "./Settings"
@@ -80,14 +80,12 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
     // 找出被删除的 id
     const deletedIds = prevIds.filter(id => !currentIds.has(id))
     if (deletedIds.length > 0) {
-      // 取消被删闹钟的系统提醒（从 storage 读旧数据取 alarmIds）
+      // 取消被删闹钟的全部系统闹钟+重试提醒
       const oldAlarms = loadUserAlarms()
       for (const delId of deletedIds) {
         const oldAlarm = oldAlarms.find(a => a.id === delId)
         if (oldAlarm) {
-          for (const aid of oldAlarm.alarmIds) {
-            cancelAlarm(aid)
-          }
+          cancelAllAlarms(oldAlarm)
         }
       }
       // 同步到 storage（保留信用卡闹钟，只更新用户闹钟部分）
@@ -111,14 +109,14 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
       if (result?.saved && result?.alarmId) {
         const alarm = loadUserAlarms().find(a => a.id === result.alarmId)
         if (alarm && alarm.enabled) {
-          // 先取消旧的系统闹钟（编辑场景）
+          // 先取消旧的系统闹钟+重试（编辑场景）
           if (alarm.alarmIds.length > 0) {
-            Promise.all(alarm.alarmIds.map((aid: string) => cancelAlarm(aid))).catch(() => {})
+            cancelAllAlarms(loadUserAlarms().find(a => a.id === result.alarmId) ?? alarm).catch(() => {})
           }
           // 重新调度系统闹钟
-          scheduleAlarm(alarm).then((newAlarmId: string | null) => {
-            if (newAlarmId) {
-              updateAlarm(alarm.id, { alarmIds: [newAlarmId] })
+          scheduleAlarm(alarm).then((result: ScheduleResult | null) => {
+            if (result) {
+              updateAlarm(alarm.id, { alarmIds: result.allAlarmIds, retryAlarmIds: result.retryIds })
               setToastMsg(editId ? "闹钟已更新并调度" : "闹钟已添加并调度")
             } else {
               setToastMsg("闹钟已保存，但系统调度失败")
@@ -138,17 +136,32 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
   const handleAdd = () => presentEditor()
   const handleEdit = (id: string) => presentEditor(id)
 
+  // 确认所有未确认时间点：取消重试提醒，标记已确认
+  const handleConfirm = (alarm: AlarmItem) => {
+    const today = new Date()
+    const unconfirmed = getUnconfirmedTimes(alarm, today)
+    // 取消该闹钟的重试提醒
+    cancelRetryAlarms(alarm).catch(() => {})
+    // 标记所有未确认时间为已确认
+    for (const t of unconfirmed) {
+      confirmReminder(alarm.id, today, t.hour, t.minute)
+    }
+    setToastMsg(`已确认: ${alarm.title}`)
+    setToastShown(true)
+    alarms.setValue(loadUserAlarms())
+  }
+
   const handleToggle = (id: string, enabled: boolean) => {
     const alarm = alarms.value.find((a) => a.id === id)
     if (!alarm) return
 
     if (enabled) {
       // 启用：先立即更新本地状态，再异步创建系统闹钟
-      updateAlarm(id, { enabled: true, alarmIds: [] })
+      updateAlarm(id, { enabled: true, alarmIds: [], retryAlarmIds: [] })
       alarms.setValue(loadUserAlarms())
-      scheduleAlarm(alarm).then((alarmId: string | null) => {
-        if (alarmId) {
-          updateAlarm(id, { alarmIds: [alarmId] })
+      scheduleAlarm(alarm).then((result: ScheduleResult | null) => {
+        if (result) {
+          updateAlarm(id, { alarmIds: result.allAlarmIds, retryAlarmIds: result.retryIds })
           setToastMsg("闹钟已启用")
           setToastShown(true)
         } else {
@@ -160,14 +173,14 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
         alarms.setValue(loadUserAlarms())
       })
     } else {
-      // 停用：先立即更新本地状态，再异步取消系统闹钟
-      const oldAlarmIds = [...alarm.alarmIds]
-      updateAlarm(id, { enabled: false, alarmIds: [] })
+      // 停用：先立即更新本地状态，再异步取消全部闹钟+重试
+      const oldAlarm = loadUserAlarms().find(a => a.id === id) ?? alarm
+      updateAlarm(id, { enabled: false, alarmIds: [], retryAlarmIds: [] })
       alarms.setValue(loadUserAlarms())
       setToastMsg("闹钟已停用")
       setToastShown(true)
-      // 异步取消系统闹钟（fire-and-forget，失败不影响本地状态）
-      Promise.all(oldAlarmIds.map((aid: string) => cancelAlarm(aid))).catch(() => {})
+      // 异步取消全部闹钟+重试（fire-and-forget）
+      cancelAllAlarms(oldAlarm).catch(() => {})
     }
   }
 
@@ -212,6 +225,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
                 alarm={alarm}
                 onToggle={handleToggle}
                 onEdit={handleEdit}
+                onConfirm={handleConfirm}
               />
             )}
           />

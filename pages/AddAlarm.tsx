@@ -1,7 +1,7 @@
 // AddAlarm.tsx - 添加/编辑闹钟页
-import { useObservable, useState, NavigationStack, List, Section, Text, DatePicker, Toggle, Picker, TextField, Button, Stepper, Navigation, HStack, Spacer } from "scripting"
+import { useObservable, useState, NavigationStack, List, Section, Text, DatePicker, Toggle, Picker, TextField, Button, Stepper, Navigation, HStack, Spacer, VStack, ForEach } from "scripting"
 
-import { AlarmItem, RepeatRule } from "../lib/constants"
+import { AlarmItem, RepeatRule, RetryConfig, RetryType } from "../lib/constants"
 import { createAlarmItem, addAlarm, updateAlarm, getAlarmById, loadGroups, loadSettings } from "../lib/alarm-store"
 import { scheduleAlarm, cancelAlarm } from "../lib/alarm-bridge"
 import { RepeatSettings } from "../components/repeat/RepeatSettings"
@@ -22,6 +22,13 @@ const DEFAULT_REPEAT_RULE: RepeatRule = {
   interval: 1,
   holidayAction: "none",
   weekdays: [2, 3, 4, 5, 6],
+}
+
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  enabled: false,
+  intervalMinutes: 5,
+  maxRetries: 3,
+  type: "notification",
 }
 
 interface AddAlarmProps {
@@ -55,6 +62,22 @@ export function AddAlarm({ editId }: AddAlarmProps) {
   // 重复规则：RepeatSettings 自管状态，通过 rule Observable 读最新值
   const repeatRule = useObservable<RepeatRule>(existing?.repeat ?? DEFAULT_REPEAT_RULE)
 
+  // 多时间点提醒（额外时间点，主时间点仍是 hour/minute）
+  // ForEach 要求元素有 id 字段
+  const reminderTimes = useObservable<{ id: string; hour: number; minute: number }[]>(
+    existing?.reminderTimes ? existing.reminderTimes.map((t, i) => ({ id: `t${i}`, ...t })) : []
+  )
+  // 重试配置
+  const retryConfig = useObservable<RetryConfig>(
+    existing?.retryConfig ? { ...existing.retryConfig } : { ...DEFAULT_RETRY_CONFIG }
+  )
+  // 新增时间点用的 DatePicker
+  const newTimeValue = useObservable<Date>(() => {
+    const d = new Date()
+    d.setHours(12, 0, 0, 0)
+    return d
+  })
+
   // 提前提醒（秒）
   const preAlertSeconds = useObservable(existing?.preAlertSeconds ?? defaults?.defaultPreAlert ?? 300)
 
@@ -76,6 +99,8 @@ export function AddAlarm({ editId }: AddAlarmProps) {
       tag: tag.value,
       note: note.value,
       tintColor: tintColor.value,
+      reminderTimes: reminderTimes.value.map(({ hour, minute }) => ({ hour, minute })),
+      retryConfig: retryConfig.value,
     }
 
     let savedAlarmId: string | null = null
@@ -134,6 +159,95 @@ export function AddAlarm({ editId }: AddAlarmProps) {
                 <Text foregroundStyle="secondaryLabel">{Math.floor(preAlertSeconds.value / 60)} 分钟</Text>
               </HStack>
             </Stepper>
+          )}
+        </Section>
+
+        <Section
+          header={<Text>多时间点提醒</Text>}
+          footer={<Text font="footnote" foregroundStyle="systemGray">主时间点在上方设置。这里添加当天额外提醒时间点，如吃药、喝水等多次提醒。</Text>}
+        >
+          <HStack alignment="center" spacing={8}>
+            <DatePicker
+              title="新增时间"
+              displayedComponents={["hourAndMinute"]}
+              value={newTimeValue}
+              datePickerStyle="compact"
+            />
+            <Spacer />
+            <Button
+              title="添加"
+              systemImage="plus.circle.fill"
+              action={() => {
+                const id = `t${Date.now()}`
+                const hour = newTimeValue.value.getHours()
+                const minute = newTimeValue.value.getMinutes()
+                const next = [...reminderTimes.value, { id, hour, minute }]
+                next.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute))
+                reminderTimes.setValue(next)
+              }}
+            />
+          </HStack>
+          {reminderTimes.value.length > 0 ? (
+            <ForEach
+              data={reminderTimes}
+              builder={(t: { id: string; hour: number; minute: number }) => (
+                <HStack key={t.id} alignment="center" spacing={12}>
+                  <Text font="body">
+                    {String(t.hour).padStart(2, "0")}:{String(t.minute).padStart(2, "0")}
+                  </Text>
+                  <Spacer />
+                  <Button
+                    title="删除"
+                    systemImage="minus.circle.fill"
+                    action={() => {
+                      const next = reminderTimes.value.filter(item => item.id !== t.id)
+                      reminderTimes.setValue(next)
+                    }}
+                  />
+                </HStack>
+              )}
+            />
+          ) : (
+            <Text foregroundStyle="secondaryLabel">无额外时间点</Text>
+          )}
+        </Section>
+
+        <Section
+          header={<Text>未确认重试</Text>}
+          footer={<Text font="footnote" foregroundStyle="systemGray">每个时间点响铃后，如果未在程序内确认，将自动按间隔重复提醒。确认后取消剩余重试。</Text>}
+        >
+          <Toggle title="启用重试" value={retryConfig.value.enabled} onChanged={(v: boolean) => retryConfig.setValue({ ...retryConfig.value, enabled: v })} />
+          {retryConfig.value.enabled && (
+            <>
+              <Stepper
+                onIncrement={() => retryConfig.value.intervalMinutes < 120 && retryConfig.setValue({ ...retryConfig.value, intervalMinutes: retryConfig.value.intervalMinutes + 1 })}
+                onDecrement={() => retryConfig.value.intervalMinutes > 1 && retryConfig.setValue({ ...retryConfig.value, intervalMinutes: retryConfig.value.intervalMinutes - 1 })}
+              >
+                <HStack alignment="center">
+                  <Text>重试间隔</Text>
+                  <Spacer />
+                  <Text foregroundStyle="secondaryLabel">{retryConfig.value.intervalMinutes} 分钟</Text>
+                </HStack>
+              </Stepper>
+              <Stepper
+                onIncrement={() => retryConfig.setValue({ ...retryConfig.value, maxRetries: retryConfig.value.maxRetries + 1 })}
+                onDecrement={() => retryConfig.value.maxRetries > 1 && retryConfig.setValue({ ...retryConfig.value, maxRetries: retryConfig.value.maxRetries - 1 })}
+              >
+                <HStack alignment="center">
+                  <Text>重试次数</Text>
+                  <Spacer />
+                  <Text foregroundStyle="secondaryLabel">{retryConfig.value.maxRetries} 次</Text>
+                </HStack>
+              </Stepper>
+              <Picker
+                title="重试方式"
+                value={retryConfig.value.type as string}
+                onChanged={(v: string) => retryConfig.setValue({ ...retryConfig.value, type: v as RetryType })}
+              >
+                <Text key="notification" tag="notification">通知</Text>
+                <Text key="alarm" tag="alarm">系统闹钟</Text>
+              </Picker>
+            </>
           )}
         </Section>
 

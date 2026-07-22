@@ -174,9 +174,9 @@ export async function syncCardAlarms(card: CreditCard): Promise<CreditCard> {
     if (alarm.enabled) {
       const specificDate = new Date(alarm.repeat.anchorDate!)
       specificDate.setHours(alarm.hour, alarm.minute, 0, 0)
-      const systemId = await scheduleAlarm(alarm, specificDate)
-      if (systemId) {
-        updateAlarm(alarm.id, { alarmIds: [systemId] })
+      const result = await scheduleAlarm(alarm, specificDate)
+      if (result) {
+        updateAlarm(alarm.id, { alarmIds: result.allAlarmIds })
       }
     }
     newAlarmIds.push(alarm.id)

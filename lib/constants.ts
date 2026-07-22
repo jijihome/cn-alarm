@@ -8,6 +8,7 @@ export const STORAGE_KEYS = {
   HOLIDAYS: "cn_alarm_holidays",
   SETTINGS: "cn_alarm_settings",
   TEMPLATES: "cn_alarm_templates",
+  CONFIRMED: "cn_alarm_confirmed",
 } as const
 
 // ==================== ios-alarm skill 路径 ====================
@@ -22,6 +23,20 @@ export type RepeatMode = "once" | "daily" | "weekly" | "monthly" | "yearly" | "l
 
 /** 调休动作三选一：none=不查调休 / skip=节假日跳过(补班日额外响) / defer=节假日当天顺延到下一个非节假日 */
 export type HolidayAction = "none" | "skip" | "defer"
+
+/** 未确认重试提醒的类型 */
+export type RetryType = "alarm" | "notification"
+
+/** 未确认重试配置 */
+export interface RetryConfig {
+  enabled: boolean
+  /** 重试间隔（分钟） */
+  intervalMinutes: number
+  /** 最大重试次数 */
+  maxRetries: number
+  /** 重试方式：alarm=系统闹钟 / notification=本地通知 */
+  type: RetryType
+}
 
 /** 每月/每年的子模式：按日期 vs 按第N周星期X */
 export type MonthlySubMode = "day" | "weekday"
@@ -80,6 +95,14 @@ export interface AlarmItem {
   updatedAt: number
   /** 来源标记：undefined/"user"=用户闹钟，"credit_card"=信用卡自动闹钟（不在闹钟列表显示） */
   source?: "user" | "credit_card"
+  /** 一天内多个额外提醒时间点（主时间点仍是 hour/minute） */
+  reminderTimes?: { hour: number; minute: number }[]
+  /** 未确认重试配置 */
+  retryConfig?: RetryConfig
+  /** 重试闹钟 ID（type=alarm 时存系统闹钟 ID，便于取消） */
+  retryAlarmIds?: string[]
+  /** 已确认的重试记录：key = "YYYY-MM-DD_HH:MM"，value = 确认时间戳 */
+  confirmedReminders?: Record<string, number>
 }
 
 export interface AlarmGroup {

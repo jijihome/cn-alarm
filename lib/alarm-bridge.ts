@@ -1,5 +1,6 @@
 // alarm-bridge.ts - Shell.run 桥接 ios-alarm skill
-import { SKILL_DIR, AlarmItem } from "./constants"
+import { SKILL_DIR, AlarmItem, RetryConfig } from "./constants"
+import { scheduleNotification, cancelNotification } from "./notification-bridge"
 
 // ==================== 通用桥接函数 ====================
 async function runScript(scriptName: string, params: Record<string, any>): Promise<any> {
@@ -16,11 +17,47 @@ async function runScript(scriptName: string, params: Record<string, any>): Promi
 
 // ==================== 创建闹钟 ====================
 // 根据 AlarmItem 构建 schedule_countdown.ts 参数并调用
-export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Promise<string | null> {
+// 支持多时间点 + 未确认重试调度
+// 返回所有系统闹钟 ID + 重试 ID，调用方负责存储
+export interface ScheduleResult {
+  mainAlarmId: string
+  allAlarmIds: string[]   // 主+额外时间点的系统闹钟 ID
+  retryIds: string[]      // 重试闹钟 ID（alarm 类型）或通知 ID（notification 类型）
+}
+
+export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Promise<ScheduleResult | null> {
+  const mainAlarmId = await scheduleSingleAlarm(alarm, alarm.hour, alarm.minute, specificDate)
+  if (!mainAlarmId) return null
+
+  // 为额外时间点调度系统闹钟
+  const allAlarmIds: string[] = [mainAlarmId]
+  if (alarm.reminderTimes && alarm.reminderTimes.length > 0) {
+    for (const t of alarm.reminderTimes) {
+      const aid = await scheduleSingleAlarm(alarm, t.hour, t.minute, specificDate)
+      if (aid) allAlarmIds.push(aid)
+    }
+  }
+
+  // 为每个时间点调度重试提醒（预调度）
+  let retryIds: string[] = []
+  if (alarm.retryConfig && alarm.retryConfig.enabled) {
+    retryIds = await scheduleRetries(alarm, specificDate)
+  }
+
+  return { mainAlarmId, allAlarmIds, retryIds }
+}
+
+// ==================== 调度单个系统闹钟 ====================
+async function scheduleSingleAlarm(
+  alarm: AlarmItem,
+  hour: number,
+  minute: number,
+  specificDate?: Date
+): Promise<string | null> {
   const params: Record<string, any> = {
     title: alarm.title,
     tintColor: alarm.tintColor,
-    metadata: { alarmItemId: alarm.id },
+    metadata: { alarmItemId: alarm.id, hour, minute },
   }
 
   // 渐进唤醒：preAlert 为用户设置的提前秒数，postAlert 为正式响铃持续时长
@@ -36,8 +73,8 @@ export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Prom
   if (alarm.repeat.mode === "weekly" && alarm.repeat.weekdays) {
     // 每周重复：用 weekly schedule
     params.scheduleType = "weekly"
-    params.hour = alarm.hour
-    params.minute = alarm.minute
+    params.hour = hour
+    params.minute = minute
     params.weekdays = alarm.repeat.weekdays
   } else if (specificDate) {
     // 一次性：用 fixed schedule
@@ -45,16 +82,16 @@ export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Prom
       specificDate.getFullYear(),
       specificDate.getMonth(),
       specificDate.getDate(),
-      alarm.hour,
-      alarm.minute
+      hour,
+      minute
     ).toISOString()
     params.scheduleType = "fixed"
     params.date = isoDate
   } else {
     // 默认：relative schedule（每天）
     params.scheduleType = "relative"
-    params.hour = alarm.hour
-    params.minute = alarm.minute
+    params.hour = hour
+    params.minute = minute
   }
 
   const result = await runScript("schedule_countdown.ts", params)
@@ -63,8 +100,89 @@ export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Prom
     const alarmId = result.alarm?.id ?? result.id ?? null
     return alarmId
   }
-  console.log("scheduleAlarm failed:", JSON.stringify(result))
+  console.log("scheduleSingleAlarm failed:", JSON.stringify(result))
   return null
+}
+
+// ==================== 调度重试提醒 ====================
+// 为每个时间点预调度 maxRetries 条重试提醒
+// type=alarm 用系统闹钟 / type=notification 用本地通知
+async function scheduleRetries(
+  alarm: AlarmItem,
+  specificDate?: Date
+): Promise<string[]> {
+  const config = alarm.retryConfig!
+  const retryIds: string[] = []
+
+  // 收集所有时间点（主 + 额外）
+  const allTimes = [
+    { hour: alarm.hour, minute: alarm.minute },
+    ...(alarm.reminderTimes ?? [])
+  ]
+
+  for (const t of allTimes) {
+    for (let i = 1; i <= config.maxRetries; i++) {
+      const retryTime = new Date()
+      if (specificDate) {
+        retryTime.setTime(specificDate.getTime())
+      }
+      retryTime.setHours(t.hour, t.minute, 0, 0)
+      retryTime.setMinutes(retryTime.getMinutes() + i * config.intervalMinutes)
+
+      const retryId = `${alarm.id}_retry_${t.hour}_${t.minute}_${i}`
+
+      if (config.type === "notification") {
+        const nid = await scheduleNotification(
+          retryId,
+          alarm.title + " (未确认提醒)",
+          `第${i}次提醒：${alarm.title}，请在程序内确认`,
+          retryTime
+        )
+        if (nid) retryIds.push(nid)
+      } else {
+        // 用系统闹钟做重试
+        const aid = await scheduleSingleAlarm(alarm, retryTime.getHours(), retryTime.getMinutes(), specificDate)
+        if (aid) retryIds.push(aid)
+      }
+    }
+  }
+
+  return retryIds
+}
+
+// ==================== 取消重试提醒 ====================
+export async function cancelRetryAlarms(alarm: AlarmItem): Promise<void> {
+  const config = alarm.retryConfig
+  if (!config || !config.enabled) return
+
+  // 收集所有时间点
+  const allTimes = [
+    { hour: alarm.hour, minute: alarm.minute },
+    ...(alarm.reminderTimes ?? [])
+  ]
+
+  if (config.type === "notification") {
+    // 通知重试：用 notification-bridge 取消
+    const retryIds: string[] = []
+    for (const t of allTimes) {
+      for (let i = 1; i <= config.maxRetries; i++) {
+        retryIds.push(`${alarm.id}_retry_${t.hour}_${t.minute}_${i}`)
+      }
+    }
+    await Promise.all(retryIds.map(id => cancelNotification(id).catch(() => {})))
+  } else {
+    // 系统闹钟重试：取消 retryAlarmIds 中的所有 ID
+    const retryIds = alarm.retryAlarmIds ?? []
+    await Promise.all(retryIds.map(id => cancelAlarm(id).catch(() => {})))
+  }
+}
+
+// ==================== 取消闹钟（主 + 重试） ====================
+export async function cancelAllAlarms(alarm: AlarmItem): Promise<void> {
+  // 取消重试
+  await cancelRetryAlarms(alarm)
+  // 取消所有系统闹钟
+  await Promise.all(alarm.alarmIds.map(id => cancelAlarm(id).catch(() => {})))
 }
 
 // ==================== 取消闹钟 ====================

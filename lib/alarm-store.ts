@@ -179,6 +179,62 @@ export function createAlarmItem(partial: Partial<AlarmItem>): AlarmItem {
     tintColor: "systemBlue",
     createdAt: now,
     updatedAt: now,
+    reminderTimes: [],
+    retryConfig: {
+      enabled: false,
+      intervalMinutes: 5,
+      maxRetries: 3,
+      type: "notification",
+    },
+    retryAlarmIds: [],
+    confirmedReminders: {},
     ...partial,
   }
+}
+
+// ==================== 确认状态管理 ====================
+
+/** 生成确认 key："YYYY-MM-DD_HH:MM" */
+export function makeConfirmKey(date: Date, hour: number, minute: number): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  const h = String(hour).padStart(2, "0")
+  const min = String(minute).padStart(2, "0")
+  return `${y}-${m}-${d}_${h}:${min}`
+}
+
+/** 标记某个时间点为已确认 */
+export function confirmReminder(alarmId: string, date: Date, hour: number, minute: number): void {
+  const items = loadAlarms()
+  const idx = items.findIndex(a => a.id === alarmId)
+  if (idx === -1) return
+  const alarm = items[idx]
+  const key = makeConfirmKey(date, hour, minute)
+  if (!alarm.confirmedReminders) alarm.confirmedReminders = {}
+  alarm.confirmedReminders[key] = Date.now()
+  // 清理 7 天前的旧记录
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+  for (const k of Object.keys(alarm.confirmedReminders)) {
+    if (alarm.confirmedReminders[k] < weekAgo) {
+      delete alarm.confirmedReminders[k]
+    }
+  }
+  alarm.updatedAt = Date.now()
+  saveAlarms(items)
+}
+
+/** 检查某个时间点是否已确认 */
+export function isReminderConfirmed(alarm: AlarmItem, date: Date, hour: number, minute: number): boolean {
+  const key = makeConfirmKey(date, hour, minute)
+  return !!(alarm.confirmedReminders && alarm.confirmedReminders[key])
+}
+
+/** 获取某闹钟今天所有未确认的时间点 */
+export function getUnconfirmedTimes(alarm: AlarmItem, date: Date): { hour: number; minute: number }[] {
+  const allTimes = [
+    { hour: alarm.hour, minute: alarm.minute },
+    ...(alarm.reminderTimes ?? [])
+  ]
+  return allTimes.filter(t => !isReminderConfirmed(alarm, date, t.hour, t.minute))
 }
