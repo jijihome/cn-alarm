@@ -20,10 +20,10 @@ function rowsOf<T>(items: T[], cols: number): T[][] {
 function ColorCell({ color, selected, onTap }: { color: string; selected: boolean; onTap: () => void }) {
   return (
     <Button action={onTap}>
-      <ZStack frame={{ width: 44, height: 44 }}>
-        <Circle fill={color as any} frame={{ width: 32, height: 32 }} />
+      <ZStack frame={{ width: 50, height: 50 }}>
+        <Circle fill={color as any} frame={{ width: 34, height: 34 }} />
         {selected && (
-          <Circle stroke={{ shapeStyle: color as any, strokeStyle: { lineWidth: 3 } }} frame={{ width: 40, height: 40 }} />
+          <Circle stroke={{ shapeStyle: color as any, strokeStyle: { lineWidth: 3 } }} frame={{ width: 42, height: 42 }} />
         )}
       </ZStack>
     </Button>
@@ -85,6 +85,9 @@ function GroupEditor({ editId }: { editId?: string }) {
     ? ALL_ICONS.filter((icon) => icon.toLowerCase().includes(searchLower))
     : []
 
+  // 分组卡片样式
+  const cardBg = <RoundedRectangle cornerRadius={12} fill={"systemBackground" as any} />
+
   return (
     <NavigationStack>
       <ScrollView>
@@ -100,36 +103,41 @@ function GroupEditor({ editId }: { editId?: string }) {
             isPresented: toastShown,
             onChanged: setToastShown,
           }}
-          spacing={16}
-          padding={16}
+          spacing={24}
+          padding={{ top: 20, bottom: 40, leading: 16, trailing: 16 }}
         >
           {/* 图标预览 */}
-          <HStack alignment="center" spacing={16}>
-            <Spacer />
-            <ZStack frame={{ width: 72, height: 72 }}>
-              <RoundedRectangle fill={colorValue.value as any} cornerRadius={18} frame={{ width: 72, height: 72 }} />
-              <Image systemName={iconName.value} foregroundStyle="white" frame={{ width: 36, height: 36 }} />
-            </ZStack>
-            <Spacer />
-          </HStack>
+          <VStack spacing={8} padding={16} background={cardBg}>
+            <HStack alignment="center" spacing={16}>
+              <Spacer />
+              <ZStack frame={{ width: 72, height: 72 }}>
+                <RoundedRectangle fill={colorValue.value as any} cornerRadius={18} frame={{ width: 72, height: 72 }} />
+                <Image systemName={iconName.value} foregroundStyle="white" frame={{ width: 36, height: 36 }} />
+              </ZStack>
+              <Spacer />
+            </HStack>
+          </VStack>
 
           {/* 名称 */}
-          <VStack spacing={4}>
-            <Text font={13} foregroundStyle="secondaryLabel">名称</Text>
+          <VStack spacing={0} padding={0} background={cardBg}>
+            <VStack spacing={4} padding={{ top: 12, leading: 16, trailing: 16 }}>
+              <Text font={13} foregroundStyle="secondaryLabel">名称</Text>
+            </VStack>
             <TextField
               title="分类名"
               value={name.value}
               onChanged={(v) => name.setValue(v)}
               prompt="输入分类名称"
+              padding={{ leading: 16, trailing: 16, bottom: 12 }}
             />
           </VStack>
 
           {/* 颜色网格 */}
-          <VStack spacing={4}>
+          <VStack spacing={12} padding={16} background={cardBg}>
             <Text font={13} foregroundStyle="secondaryLabel">颜色</Text>
-            <VStack spacing={8}>
+            <VStack spacing={12}>
               {rowsOf(COLOR_OPTIONS, COLS).map((row, ri) => (
-                <HStack key={ri} spacing={8}>
+                <HStack key={ri} spacing={12} alignment="center">
                   {row.map((c) => (
                     <ColorCell
                       key={c.value}
@@ -138,27 +146,33 @@ function GroupEditor({ editId }: { editId?: string }) {
                       onTap={() => colorValue.setValue(c.value)}
                     />
                   ))}
+                  {row.length < COLS && Array.from({ length: COLS - row.length }, (_, si) => (
+                    <ColorCell key={`e${si}`} color="clear" selected={false} onTap={() => {}} />
+                  ))}
                 </HStack>
               ))}
             </VStack>
           </VStack>
 
           {/* 搜索栏 */}
-          <TextField
-            title="搜索"
-            value={searchText}
-            onChanged={setSearchText}
-            prompt="搜索符号"
-          />
+          <VStack spacing={0} padding={0} background={cardBg}>
+            <TextField
+              title="搜索"
+              value={searchText}
+              onChanged={setSearchText}
+              prompt="搜索符号"
+              padding={{ top: 12, leading: 16, trailing: 16, bottom: 12 }}
+            />
+          </VStack>
 
           {/* 图标网格 */}
           {isSearching ? (
-            <VStack spacing={4}>
+            <VStack spacing={8} padding={16} background={cardBg}>
               <Text font={13} foregroundStyle="secondaryLabel">搜索结果 ({filteredIcons.length})</Text>
               {filteredIcons.length > 0 ? (
-                <VStack spacing={8}>
+                <VStack spacing={12}>
                   {rowsOf(filteredIcons, COLS).map((row, ri) => (
-                    <HStack key={ri} spacing={8}>
+                    <HStack key={ri} spacing={12} alignment="center">
                       {row.map((icon) => (
                         <IconCell
                           key={icon}
@@ -167,6 +181,9 @@ function GroupEditor({ editId }: { editId?: string }) {
                           selected={iconName.value === icon}
                           onTap={() => iconName.setValue(icon)}
                         />
+                      ))}
+                      {row.length < COLS && Array.from({ length: COLS - row.length }, (_, si) => (
+                        <IconCell key={`e${si}`} icon="circle" color="clear" selected={false} onTap={() => {}} />
                       ))}
                     </HStack>
                   ))}
@@ -177,11 +194,11 @@ function GroupEditor({ editId }: { editId?: string }) {
             </VStack>
           ) : (
             ICON_CATEGORIES.map((cat) => (
-              <VStack key={cat.name} spacing={4}>
+              <VStack key={cat.name} spacing={12} padding={16} background={cardBg}>
                 <Text font={13} foregroundStyle="secondaryLabel">{cat.name}</Text>
-                <VStack spacing={8}>
+                <VStack spacing={12}>
                   {rowsOf(cat.icons, COLS).map((row, ri) => (
-                    <HStack key={ri} spacing={8}>
+                    <HStack key={ri} spacing={12} alignment="center">
                       {row.map((icon) => (
                         <IconCell
                           key={icon}
@@ -190,6 +207,9 @@ function GroupEditor({ editId }: { editId?: string }) {
                           selected={iconName.value === icon}
                           onTap={() => iconName.setValue(icon)}
                         />
+                      ))}
+                      {row.length < COLS && Array.from({ length: COLS - row.length }, (_, si) => (
+                        <IconCell key={`e${si}`} icon="circle" color="clear" selected={false} onTap={() => {}} />
                       ))}
                     </HStack>
                   ))}
