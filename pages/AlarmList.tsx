@@ -1,11 +1,16 @@
 // AlarmList.tsx - 闹钟列表页
-import { useState, useObservable, NavigationStack, List, Section, Text, Button, EditButton, ContentUnavailableView, VStack, Navigation, ForEach, useEffect } from "scripting"
+import { useState, useObservable, NavigationStack, List, Section, Text, Button, EditButton, ContentUnavailableView, VStack, HStack, Navigation, ForEach, useEffect } from "scripting"
 import { AlarmItem } from "../lib/constants"
 import { loadAlarms, saveAlarms, updateAlarm } from "../lib/alarm-store"
 import { getNextAlarmFromList, formatCountdown, formatRepeatDescription } from "../lib/scheduler"
 import { scheduleAlarm, cancelAlarm } from "../lib/alarm-bridge"
 import { AlarmRow } from "../components/AlarmRow"
 import { AddAlarm } from "./AddAlarm"
+import { Settings } from "./Settings"
+
+/** 模态弹出设置页 */
+const presentSettings = () =>
+  Navigation.present({ element: <Settings />, modalPresentationStyle: "pageSheet" })
 
 /** 加载用户闹钟（排除信用卡自动闹钟） */
 const loadUserAlarms = (): AlarmItem[] =>
@@ -172,7 +177,12 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
         navigationTitle="闹钟"
         toolbar={{
           topBarLeading: <EditButton />,
-          topBarTrailing: <Button title="添加" systemImage="plus" action={handleAdd} />,
+          topBarTrailing: (
+            <HStack spacing={0}>
+              <Button title="" systemImage="gearshape" action={presentSettings} />
+              <Button title="添加" systemImage="plus" action={handleAdd} />
+            </HStack>
+          ),
         }}
         toast={{
           message: toastMsg,

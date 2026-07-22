@@ -3,6 +3,11 @@ import { useState, useObservable, NavigationStack, List, Section, Text, ForEach,
 import { CreditCard, ReminderTypeConfig } from "../lib/constants"
 import { loadCards, updateCard, getNextDueDate, formatDateCN, syncCardAlarmsById, cancelCardAlarmsById } from "../lib/credit-card"
 import { AddCreditCard } from "./AddCreditCard"
+import { Settings } from "./Settings"
+
+/** 模态弹出设置页 */
+const presentSettings = () =>
+  Navigation.present({ element: <Settings />, modalPresentationStyle: "pageSheet" })
 
 /** 迁移旧 boolean 格式 → ReminderTypeConfig */
 function migrateRT(raw: any): ReminderTypeConfig {
@@ -148,7 +153,12 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
       <List
         navigationTitle="信用卡"
         toolbar={{
-          topBarTrailing: <Button title="添加" systemImage="plus" action={handleAdd} />,
+          topBarTrailing: (
+            <HStack spacing={0}>
+              <Button title="" systemImage="gearshape" action={presentSettings} />
+              <Button title="添加" systemImage="plus" action={handleAdd} />
+            </HStack>
+          ),
         }}
         toast={{
           message: toastMsg,

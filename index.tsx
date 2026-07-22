@@ -1,8 +1,7 @@
 // index.tsx - 主入口
-import { Script, Navigation, TabView, Tab, Text, useObservable } from "scripting"
+import { Script, Navigation, TabView, Tab, useObservable } from "scripting"
 import { AlarmList } from "./pages/AlarmList"
 import { CreditCardList } from "./pages/CreditCardList"
-import { Settings } from "./pages/Settings"
 import { initializeDefaults, loadSettings } from "./lib/alarm-store"
 
 function RootView() {
@@ -16,9 +15,6 @@ function RootView() {
       </Tab>
       <Tab title="信用卡" systemImage="creditcard.fill" value={1}>
         <CreditCardList selection={selection} />
-      </Tab>
-      <Tab title="设置" systemImage="gearshape.fill" value={2}>
-        <Settings selection={selection} />
       </Tab>
     </TabView>
   )
