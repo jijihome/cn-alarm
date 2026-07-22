@@ -78,13 +78,16 @@ export function AddAlarm({ editId }: AddAlarmProps) {
       tintColor: tintColor.value,
     }
 
+    let savedAlarmId: string | null = null
     if (editId && existing) {
       updateAlarm(editId, { ...alarmData })
+      savedAlarmId = editId
     } else {
       const alarm = createAlarmItem(alarmData)
       addAlarm(alarm)
+      savedAlarmId = alarm.id
     }
-    dismiss({ saved: true })
+    dismiss({ saved: true, alarmId: savedAlarmId })
   }
 
   const colorLabels = COLOR_OPTIONS.map((c) => c.label)

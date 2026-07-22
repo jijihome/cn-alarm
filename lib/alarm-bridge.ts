@@ -4,11 +4,13 @@ import { SKILL_DIR, AlarmItem } from "./constants"
 // ==================== 通用桥接函数 ====================
 async function runScript(scriptName: string, params: Record<string, any>): Promise<any> {
   const jsonParams = JSON.stringify(params).replace(/'/g, "\\u0027")
-  const cmd = `scripting-ts run ${SKILL_DIR}/${scriptName} --queryparameters '${jsonParams}'`
+  // 路径含空格（Mobile Documents），必须转义，否则 Shell 把空格后当参数
+  const skillPath = `${SKILL_DIR}/${scriptName}`.replace(/ /g, "\\ ")
+  const cmd = `scripting-ts run ${skillPath} --queryparameters '${jsonParams}'`
   const result = await Shell.run(cmd)
   const stdout = result.output
   const match = stdout.match(/Script result:\s*(\{[\s\S]*\})/)
-  if (!match) throw new Error("No result from script: " + scriptName)
+  if (!match) throw new Error("No result from script: " + scriptName + " | stdout: " + stdout.slice(0, 200))
   return JSON.parse(match[1])
 }
 
@@ -21,9 +23,13 @@ export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Prom
     metadata: { alarmItemId: alarm.id },
   }
 
-  // 渐进唤醒
+  // 渐进唤醒：preAlert 为用户设置的提前秒数，postAlert 为正式响铃持续时长
+  // 非渐进唤醒：也需要至少一个 alert 参数（schedule_countdown 硬性要求）
+  // 用 postAlert=60 表示正式响铃后 60 秒自动停止
   if (alarm.gradualWake && alarm.preAlertSeconds > 0) {
     params.preAlert = alarm.preAlertSeconds
+    params.postAlert = 60
+  } else {
     params.postAlert = 60
   }
 
@@ -52,8 +58,10 @@ export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Prom
   }
 
   const result = await runScript("schedule_countdown.ts", params)
-  if (result.success && result.id) {
-    return result.id
+  if (result.success) {
+    // schedule_countdown 返回 { success, alarm: { id, state, ... } }
+    const alarmId = result.alarm?.id ?? result.id ?? null
+    return alarmId
   }
   console.log("scheduleAlarm failed:", JSON.stringify(result))
   return null

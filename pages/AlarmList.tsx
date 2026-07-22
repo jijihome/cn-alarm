@@ -78,10 +78,29 @@ export function AlarmList() {
       element: <AddAlarm editId={editId} />,
       modalPresentationStyle: "fullScreen",
     }).then((result: any) => {
-      // 只有真正保存才显示toast
-      if (result?.saved) {
-        setToastMsg(editId ? "闹钟已更新" : "闹钟已添加")
-        setToastShown(true)
+      // 只有真正保存才处理调度和 toast
+      if (result?.saved && result?.alarmId) {
+        const alarm = loadAlarms().find(a => a.id === result.alarmId)
+        if (alarm && alarm.enabled) {
+          // 先取消旧的系统闹钟（编辑场景）
+          if (alarm.alarmIds.length > 0) {
+            Promise.all(alarm.alarmIds.map((aid: string) => cancelAlarm(aid))).catch(() => {})
+          }
+          // 重新调度系统闹钟
+          scheduleAlarm(alarm).then((newAlarmId: string | null) => {
+            if (newAlarmId) {
+              updateAlarm(alarm.id, { alarmIds: [newAlarmId] })
+              setToastMsg(editId ? "闹钟已更新并调度" : "闹钟已添加并调度")
+            } else {
+              setToastMsg("闹钟已保存，但系统调度失败")
+            }
+            setToastShown(true)
+            alarms.setValue(loadAlarms())
+          })
+        } else {
+          setToastMsg(editId ? "闹钟已更新" : "闹钟已添加")
+          setToastShown(true)
+        }
       }
       alarms.setValue(loadAlarms())
     })
