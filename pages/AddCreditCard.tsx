@@ -1,6 +1,6 @@
 // AddCreditCard.tsx - 添加/编辑信用卡页
 import { useObservable, NavigationStack, List, Section, Text, Picker, TextField, Button, Stepper, Toggle, DatePicker, Navigation, useState, HStack, VStack, Spacer } from "scripting"
-import { CreditCard, BANK_PRESETS, ReminderTypeConfig } from "../lib/constants"
+import { CreditCard, BANK_PRESETS, ReminderTypeConfig, RetryConfig, RetryType } from "../lib/constants"
 import { createCardSync, updateCard, removeCardSync, syncCardAlarmsById, cancelCardAlarmsById, getCardById } from "../lib/credit-card"
 
 const COLOR_OPTIONS = [
@@ -32,15 +32,15 @@ function extractTime(d: Date): { hour: number; minute: number } {
 /** 默认配置：开启、9:00 */
 const DEFAULT_RT: ReminderTypeConfig = { enabled: true, hour: 9, minute: 0 }
 
-/** 迁移旧 reminderTypes 格式（boolean → ReminderTypeConfig） */
+/** 迁移旧 reminderTypes 格式（boolean → ReminderTypeConfig），含 type 字段 */
 function migrateRT(raw: any): ReminderTypeConfig {
   if (typeof raw === "boolean") {
-    return { enabled: raw, hour: 9, minute: 0 }
+    return { enabled: raw, hour: 9, minute: 0, type: "alarm" }
   }
   if (raw && typeof raw === "object" && "enabled" in raw) {
-    return { enabled: raw.enabled, hour: raw.hour ?? 9, minute: raw.minute ?? 0 }
+    return { enabled: raw.enabled, hour: raw.hour ?? 9, minute: raw.minute ?? 0, type: (raw.type ?? "alarm") as RetryType }
   }
-  return { ...DEFAULT_RT }
+  return { ...DEFAULT_RT, type: "alarm" }
 }
 
 export function AddCreditCard({ editId }: AddCreditCardProps) {
@@ -70,12 +70,22 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
   const rawRT = existing?.reminderTypes
   const stmEnabled = useObservable(migrateRT(rawRT?.statement).enabled)
   const stmTime = useObservable(makeDate(migrateRT(rawRT?.statement).hour, migrateRT(rawRT?.statement).minute))
+  const stmType = useObservable<string>(migrateRT(rawRT?.statement).type ?? "alarm")
   const advEnabled = useObservable(migrateRT(rawRT?.advance).enabled)
   const advTime = useObservable(makeDate(migrateRT(rawRT?.advance).hour, migrateRT(rawRT?.advance).minute))
+  const advType = useObservable<string>(migrateRT(rawRT?.advance).type ?? "alarm")
   const dueEnabled = useObservable(migrateRT(rawRT?.due).enabled)
   const dueTime = useObservable(makeDate(migrateRT(rawRT?.due).hour, migrateRT(rawRT?.due).minute))
+  const dueType = useObservable<string>(migrateRT(rawRT?.due).type ?? "alarm")
   const bufEnabled = useObservable(migrateRT(rawRT?.buffer).enabled)
   const bufTime = useObservable(makeDate(migrateRT(rawRT?.buffer).hour, migrateRT(rawRT?.buffer).minute))
+  const bufType = useObservable<string>(migrateRT(rawRT?.buffer).type ?? "alarm")
+
+  // 重试配置（未确认重复提醒）
+  const DEFAULT_RETRY: RetryConfig = { enabled: false, intervalMinutes: 5, maxRetries: 3, type: "notification" }
+  const retryConfig = useObservable<RetryConfig>(
+    existing?.retryConfig ? { ...existing.retryConfig } : { ...DEFAULT_RETRY }
+  )
 
   const pickerValue = isCustom.value ? CUSTOM_TAG : bankName.value
 
@@ -104,11 +114,12 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
       remindDaysBefore: remindDaysBefore.value,
       tintColor: tintColor.value,
       reminderTypes: {
-        statement: { enabled: stmEnabled.value, ...extractTime(stmTime.value) },
-        advance: { enabled: advEnabled.value, ...extractTime(advTime.value) },
-        due: { enabled: dueEnabled.value, ...extractTime(dueTime.value) },
-        buffer: { enabled: bufEnabled.value, ...extractTime(bufTime.value) },
+        statement: { enabled: stmEnabled.value, ...extractTime(stmTime.value), type: stmType.value as RetryType },
+        advance: { enabled: advEnabled.value, ...extractTime(advTime.value), type: advType.value as RetryType },
+        due: { enabled: dueEnabled.value, ...extractTime(dueTime.value), type: dueType.value as RetryType },
+        buffer: { enabled: bufEnabled.value, ...extractTime(bufTime.value), type: bufType.value as RetryType },
       },
+      retryConfig: retryConfig.value,
     }
 
     if (editId && existing) {
@@ -222,22 +233,82 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
           </Stepper>
         </Section>
 
-        <Section header={<Text>提醒类型</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">点击时间可修改提醒时刻，关闭的不会生成闹钟</Text>}>
+        <Section header={<Text>提醒类型</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">点击时间可修改提醒时刻，选择闹钟或通知方式。关闭的不会生成提醒。</Text>}>
           <Toggle title="账单已出" value={stmEnabled} />
           {stmEnabled.value && (
-            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={stmTime} datePickerStyle="compact" />
+            <HStack alignment="center" spacing={8}>
+              <DatePicker title="时间" displayedComponents={["hourAndMinute"]} value={stmTime} datePickerStyle="compact" />
+              <Picker title="方式" value={stmType.value} onChanged={(v: string) => stmType.setValue(v)}>
+                <Text key="alarm" tag="alarm">闹钟</Text>
+                <Text key="notification" tag="notification">通知</Text>
+              </Picker>
+            </HStack>
           )}
           <Toggle title={`提前${remindDaysBefore.value}天提醒`} value={advEnabled} />
           {advEnabled.value && (
-            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={advTime} datePickerStyle="compact" />
+            <HStack alignment="center" spacing={8}>
+              <DatePicker title="时间" displayedComponents={["hourAndMinute"]} value={advTime} datePickerStyle="compact" />
+              <Picker title="方式" value={advType.value} onChanged={(v: string) => advType.setValue(v)}>
+                <Text key="alarm" tag="alarm">闹钟</Text>
+                <Text key="notification" tag="notification">通知</Text>
+              </Picker>
+            </HStack>
           )}
           <Toggle title="还款截止日" value={dueEnabled} />
           {dueEnabled.value && (
-            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={dueTime} datePickerStyle="compact" />
+            <HStack alignment="center" spacing={8}>
+              <DatePicker title="时间" displayedComponents={["hourAndMinute"]} value={dueTime} datePickerStyle="compact" />
+              <Picker title="方式" value={dueType.value} onChanged={(v: string) => dueType.setValue(v)}>
+                <Text key="alarm" tag="alarm">闹钟</Text>
+                <Text key="notification" tag="notification">通知</Text>
+              </Picker>
+            </HStack>
           )}
           <Toggle title="宽限期最后一天" value={bufEnabled} />
           {bufEnabled.value && (
-            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={bufTime} datePickerStyle="compact" />
+            <HStack alignment="center" spacing={8}>
+              <DatePicker title="时间" displayedComponents={["hourAndMinute"]} value={bufTime} datePickerStyle="compact" />
+              <Picker title="方式" value={bufType.value} onChanged={(v: string) => bufType.setValue(v)}>
+                <Text key="alarm" tag="alarm">闹钟</Text>
+                <Text key="notification" tag="notification">通知</Text>
+              </Picker>
+            </HStack>
+          )}
+        </Section>
+
+        <Section header={<Text>重复提醒</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">开启后，提醒触发时若未确认，将按间隔重复提醒，直到达到最大次数</Text>}>
+          <Toggle title="未确认重复提醒" value={retryConfig.value.enabled as any} onChanged={(v: boolean) => retryConfig.setValue({ ...retryConfig.value, enabled: v })} />
+          {retryConfig.value.enabled && (
+            <>
+              <Stepper
+                onIncrement={() => retryConfig.setValue({ ...retryConfig.value, intervalMinutes: Math.min(60, retryConfig.value.intervalMinutes + 5) })}
+                onDecrement={() => retryConfig.setValue({ ...retryConfig.value, intervalMinutes: Math.max(1, retryConfig.value.intervalMinutes - 5) })}
+              >
+                <HStack alignment="center">
+                  <Text>重试间隔</Text>
+                  <Spacer />
+                  <Text foregroundStyle="secondaryLabel">{retryConfig.value.intervalMinutes}分钟</Text>
+                </HStack>
+              </Stepper>
+              <Stepper
+                onIncrement={() => retryConfig.setValue({ ...retryConfig.value, maxRetries: Math.min(10, retryConfig.value.maxRetries + 1) })}
+                onDecrement={() => retryConfig.setValue({ ...retryConfig.value, maxRetries: Math.max(1, retryConfig.value.maxRetries - 1) })}
+              >
+                <HStack alignment="center">
+                  <Text>最大次数</Text>
+                  <Spacer />
+                  <Text foregroundStyle="secondaryLabel">{retryConfig.value.maxRetries}次</Text>
+                </HStack>
+              </Stepper>
+              <Picker
+                title="重试方式"
+                value={retryConfig.value.type as string}
+                onChanged={(v: string) => retryConfig.setValue({ ...retryConfig.value, type: v as RetryType })}
+              >
+                <Text key="alarm" tag="alarm">闹钟</Text>
+                <Text key="notification" tag="notification">通知</Text>
+              </Picker>
+            </>
           )}
         </Section>
 

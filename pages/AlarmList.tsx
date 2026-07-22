@@ -139,14 +139,37 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
   // 确认所有未确认时间点：取消重试提醒，标记已确认
   const handleConfirm = (alarm: AlarmItem) => {
     const today = new Date()
-    const unconfirmed = getUnconfirmedTimes(alarm, today)
-    // 取消该闹钟的重试提醒
-    cancelRetryAlarms(alarm).catch(() => {})
-    // 标记所有未确认时间为已确认
-    for (const t of unconfirmed) {
-      confirmReminder(alarm.id, today, t.hour, t.minute)
+    const now = new Date()
+    const currentMinutes = now.getHours() * 60 + now.getMinutes()
+
+    if (alarm.retryConfig?.confirmAll) {
+      // 一次性确认全部时间点
+      const unconfirmed = getUnconfirmedTimes(alarm, today)
+      for (const t of unconfirmed) {
+        confirmReminder(alarm.id, today, t.hour, t.minute)
+      }
+      cancelRetryAlarms(alarm).catch(() => {})
+      setToastMsg(`已确认全部: ${alarm.title}`)
+    } else {
+      // 逐个确认：只确认已触发的时间点（当前时间之前或等于的时间点）
+      const unconfirmed = getUnconfirmedTimes(alarm, today)
+      const triggered = unconfirmed.filter(t => t.hour * 60 + t.minute <= currentMinutes)
+      if (triggered.length === 0) {
+        // 没有已触发的，确认最早的（容错）
+        if (unconfirmed.length > 0) {
+          const earliest = unconfirmed.reduce((a, b) => a.hour * 60 + a.minute < b.hour * 60 + b.minute ? a : b)
+          confirmReminder(alarm.id, today, earliest.hour, earliest.minute)
+          setToastMsg(`已确认 ${String(earliest.hour).padStart(2, "0")}:${String(earliest.minute).padStart(2, "0")}: ${alarm.title}`)
+        }
+      } else {
+        for (const t of triggered) {
+          confirmReminder(alarm.id, today, t.hour, t.minute)
+        }
+        const timesStr = triggered.map(t => `${String(t.hour).padStart(2, "0")}:${String(t.minute).padStart(2, "0")}`).join(", ")
+        setToastMsg(`已确认 ${timesStr}: ${alarm.title}`)
+      }
+      cancelRetryAlarms(alarm).catch(() => {})
     }
-    setToastMsg(`已确认: ${alarm.title}`)
     setToastShown(true)
     alarms.setValue(loadUserAlarms())
   }

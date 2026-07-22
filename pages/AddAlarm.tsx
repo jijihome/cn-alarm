@@ -215,7 +215,7 @@ export function AddAlarm({ editId }: AddAlarmProps) {
 
         <Section
           header={<Text>未确认重试</Text>}
-          footer={<Text font="footnote" foregroundStyle="systemGray">每个时间点响铃后，如果未在程序内确认，将自动按间隔重复提醒。确认后取消剩余重试。</Text>}
+          footer={<Text font="footnote" foregroundStyle="systemGray">每个时间点响铃后，如果未在程序内确认，将自动按间隔重复提醒。默认逐个确认，开启「一次确认全部」后确认任一时间点即确认当天所有时间点。</Text>}
         >
           <Toggle title="启用重试" value={retryConfig.value.enabled} onChanged={(v: boolean) => retryConfig.setValue({ ...retryConfig.value, enabled: v })} />
           {retryConfig.value.enabled && (
@@ -248,6 +248,11 @@ export function AddAlarm({ editId }: AddAlarmProps) {
                 <Text key="notification" tag="notification">通知</Text>
                 <Text key="alarm" tag="alarm">系统闹钟</Text>
               </Picker>
+              <Toggle
+                title="一次确认全部"
+                value={retryConfig.value.confirmAll ?? false}
+                onChanged={(v: boolean) => retryConfig.setValue({ ...retryConfig.value, confirmAll: v })}
+              />
             </>
           )}
         </Section>

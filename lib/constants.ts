@@ -36,6 +36,8 @@ export interface RetryConfig {
   maxRetries: number
   /** 重试方式：alarm=系统闹钟 / notification=本地通知 */
   type: RetryType
+  /** 确认模式：false=逐个确认（默认），true=一次确认全部时间点 */
+  confirmAll?: boolean
 }
 
 /** 每月/每年的子模式：按日期 vs 按第N周星期X */
@@ -115,11 +117,13 @@ export interface AlarmGroup {
   order: number
 }
 
-/** 单个提醒类型配置：开关 + 时间 */
+/** 单个提醒类型配置：开关 + 时间 + 方式 */
 export interface ReminderTypeConfig {
   enabled: boolean
   hour: number
   minute: number
+  /** 提醒方式：alarm=系统闹钟 / notification=本地通知。默认 alarm（兼容旧数据） */
+  type?: RetryType
 }
 
 export interface CreditCard {
@@ -140,6 +144,8 @@ export interface CreditCard {
     due: ReminderTypeConfig         // 还款截止
     buffer: ReminderTypeConfig      // 宽限期最后一天
   }
+  /** 未确认重试配置，应用到所有启用的提醒类型。undefined=不重试（兼容旧数据） */
+  retryConfig?: RetryConfig
 }
 
 export interface HolidayEntry {

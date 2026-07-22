@@ -1,7 +1,7 @@
 // credit-card.ts - 信用卡还款日计算+闹钟生成
-import { STORAGE_KEYS, CreditCard, AlarmItem, BANK_PRESETS, ReminderTypeConfig } from "./constants"
-import { generateUUID, addAlarm, updateAlarm, removeAlarm, loadAlarms, saveAlarms, createAlarmItem } from "./alarm-store"
-import { scheduleAlarm, cancelAlarm } from "./alarm-bridge"
+import { STORAGE_KEYS, CreditCard, AlarmItem, BANK_PRESETS, ReminderTypeConfig, RetryConfig, RetryType } from "./constants"
+import { generateUUID, addAlarm, updateAlarm, removeAlarm, loadAlarms, saveAlarms, createAlarmItem, confirmReminder, unconfirmAllReminders, getUnconfirmedTimes } from "./alarm-store"
+import { scheduleAlarm, cancelAlarm, cancelAllAlarms, cancelRetryAlarms } from "./alarm-bridge"
 
 const SHARED = { shared: true }
 
@@ -77,7 +77,7 @@ export function calculateRemindDate(card: CreditCard, year: number, month: numbe
 }
 
 // ==================== 创建信用卡闹钟 ====================
-function createCardAlarm(card: CreditCard, date: Date, titleSuffix: string, tintColor: string, hour: number, minute: number): AlarmItem {
+function createCardAlarm(card: CreditCard, date: Date, titleSuffix: string, tintColor: string, hour: number, minute: number, remindType: RetryType): AlarmItem {
   return createAlarmItem({
     title: `${card.bankName}(${card.last4Digits}) ${titleSuffix}`,
     hour,
@@ -94,6 +94,7 @@ function createCardAlarm(card: CreditCard, date: Date, titleSuffix: string, tint
     tag: card.last4Digits,
     note: `${card.bankName} 尾号${card.last4Digits}`,
     source: "credit_card",
+    mainType: remindType,
   })
 }
 
@@ -105,9 +106,9 @@ export function generateCardAlarms(card: CreditCard): AlarmItem[] {
   // 兼容旧数据：reminderTypes 缺失时全开 9:00；旧 boolean 格式自动迁移
   const defaultRT: ReminderTypeConfig = { enabled: true, hour: 9, minute: 0 }
   function migrateRTField(raw: any): ReminderTypeConfig {
-    if (typeof raw === "boolean") return { enabled: raw, hour: 9, minute: 0 }
-    if (raw && typeof raw === "object" && "enabled" in raw) return { enabled: raw.enabled, hour: raw.hour ?? 9, minute: raw.minute ?? 0 }
-    return defaultRT
+    if (typeof raw === "boolean") return { enabled: raw, hour: 9, minute: 0, type: "alarm" }
+    if (raw && typeof raw === "object" && "enabled" in raw) return { enabled: raw.enabled, hour: raw.hour ?? 9, minute: raw.minute ?? 0, type: (raw.type ?? "alarm") as RetryType }
+    return { ...defaultRT, type: "alarm" }
   }
   const rawRT = card.reminderTypes
   const rt = rawRT ? {
@@ -133,16 +134,16 @@ export function generateCardAlarms(card: CreditCard): AlarmItem[] {
 
     // 只生成未来的闹钟，且只生成用户启用的类型
     if (rt.statement.enabled && statementDate > now) {
-      alarms.push(createCardAlarm(card, statementDate, "账单已出", card.tintColor, rt.statement.hour, rt.statement.minute))
+      alarms.push(createCardAlarm(card, statementDate, "账单已出", card.tintColor, rt.statement.hour, rt.statement.minute, rt.statement.type ?? "alarm"))
     }
     if (rt.advance.enabled && remindDate > now) {
-      alarms.push(createCardAlarm(card, remindDate, `${card.remindDaysBefore}天后还款`, card.tintColor, rt.advance.hour, rt.advance.minute))
+      alarms.push(createCardAlarm(card, remindDate, `${card.remindDaysBefore}天后还款`, card.tintColor, rt.advance.hour, rt.advance.minute, rt.advance.type ?? "alarm"))
     }
     if (rt.due.enabled && dueDate > now) {
-      alarms.push(createCardAlarm(card, dueDate, "今日还款截止", card.tintColor, rt.due.hour, rt.due.minute))
+      alarms.push(createCardAlarm(card, dueDate, "今日还款截止", card.tintColor, rt.due.hour, rt.due.minute, rt.due.type ?? "alarm"))
     }
     if (rt.buffer.enabled && bufferEnd > now) {
-      alarms.push(createCardAlarm(card, bufferEnd, "宽限期最后一天！", "systemRed", rt.buffer.hour, rt.buffer.minute))
+      alarms.push(createCardAlarm(card, bufferEnd, "宽限期最后一天！", "systemRed", rt.buffer.hour, rt.buffer.minute, rt.buffer.type ?? "alarm"))
     }
 
     // 下个月
@@ -155,28 +156,39 @@ export function generateCardAlarms(card: CreditCard): AlarmItem[] {
 
 // ==================== 同步信用卡闹钟 ====================
 export async function syncCardAlarms(card: CreditCard): Promise<CreditCard> {
-  // 先取消旧闹钟
+  // 先取消旧闹钟（含重试）
+  const existingAlarms = loadAlarms()
+  const oldCardAlarms = existingAlarms.filter((a) => card.alarmItemIds.includes(a.id))
+  for (const alarm of oldCardAlarms) {
+    await cancelAllAlarms(alarm).catch(() => {})
+  }
   for (const alarmId of card.alarmItemIds) {
-    await cancelAlarm(alarmId)
+    await cancelAlarm(alarmId).catch(() => {})
   }
 
   // 从 alarm-store 中删除旧的信用卡闹钟
-  const allAlarms = loadAlarms()
-  const remaining = allAlarms.filter((a) => !card.alarmItemIds.includes(a.id))
+  const remaining = existingAlarms.filter((a) => !card.alarmItemIds.includes(a.id))
   saveAlarms(remaining)
 
   // 生成新闹钟
   const newAlarms = generateCardAlarms(card)
   const newAlarmIds: string[] = []
 
+  // 信用卡的 retryConfig 应用到所有生成的闹钟
+  const cardRetryConfig = card.retryConfig
+
   for (const alarm of newAlarms) {
+    // 把信用卡的 retryConfig 写入闹钟
+    if (cardRetryConfig && cardRetryConfig.enabled) {
+      alarm.retryConfig = cardRetryConfig
+    }
     addAlarm(alarm)
     if (alarm.enabled) {
       const specificDate = new Date(alarm.repeat.anchorDate!)
       specificDate.setHours(alarm.hour, alarm.minute, 0, 0)
       const result = await scheduleAlarm(alarm, specificDate)
       if (result) {
-        updateAlarm(alarm.id, { alarmIds: result.allAlarmIds })
+        updateAlarm(alarm.id, { alarmIds: result.allAlarmIds, retryAlarmIds: result.retryIds })
       }
     }
     newAlarmIds.push(alarm.id)
@@ -236,8 +248,15 @@ export async function syncCardAlarmsById(cardId: string): Promise<CreditCard | n
 export async function cancelCardAlarmsById(cardId: string): Promise<void> {
   const card = getCardById(cardId)
   if (!card) return
+  // 从 alarm-store 获取关联闹钟，逐个用 cancelAllAlarms 取消（含重试）
+  const allAlarms = loadAlarms()
+  const cardAlarms = allAlarms.filter((a) => card.alarmItemIds.includes(a.id))
+  for (const alarm of cardAlarms) {
+    await cancelAllAlarms(alarm).catch(() => {})
+  }
+  // 也按 ID 取消（兜底：store 中可能已丢失的闹钟）
   for (const alarmId of card.alarmItemIds) {
-    await cancelAlarm(alarmId)
+    await cancelAlarm(alarmId).catch(() => {})
   }
 }
 
@@ -252,8 +271,14 @@ export async function createCard(partial: Partial<CreditCard>): Promise<CreditCa
 export async function deleteCard(id: string): Promise<void> {
   const card = removeCardSync(id)
   if (card) {
+    // 从 alarm-store 获取关联闹钟，逐个用 cancelAllAlarms 取消（含重试）
+    const allAlarms = loadAlarms()
+    const cardAlarms = allAlarms.filter((a) => card.alarmItemIds.includes(a.id))
+    for (const alarm of cardAlarms) {
+      await cancelAllAlarms(alarm).catch(() => {})
+    }
     for (const alarmId of card.alarmItemIds) {
-      await cancelAlarm(alarmId)
+      await cancelAlarm(alarmId).catch(() => {})
     }
   }
 }
@@ -276,4 +301,45 @@ export function getNextDueDate(card: CreditCard): Date {
     if (month > 12) { month = 1; year++ }
   }
   return calculateDueDate(card, year, month)
+}
+
+// ==================== 确认状态管理 ====================
+// 信用卡闹钟的确认操作：对 card.alarmItemIds 关联的所有 AlarmItem 执行
+
+/** 获取一张信用卡的未确认提醒数量（今天） */
+export function getCardUnconfirmedCount(card: CreditCard): number {
+  if (!card.retryConfig?.enabled) return 0
+  const allAlarms = loadAlarms()
+  const cardAlarms = allAlarms.filter((a) => card.alarmItemIds.includes(a.id) && a.retryConfig?.enabled)
+  const today = new Date()
+  let count = 0
+  for (const alarm of cardAlarms) {
+    count += getUnconfirmedTimes(alarm, today).length
+  }
+  return count
+}
+
+/** 确认一张信用卡的所有未确认提醒：标记已确认 + 取消重试闹钟 */
+export function confirmCardReminders(card: CreditCard): void {
+  const allAlarms = loadAlarms()
+  const cardAlarms = allAlarms.filter((a) => card.alarmItemIds.includes(a.id))
+  const today = new Date()
+  for (const alarm of cardAlarms) {
+    const unconfirmed = getUnconfirmedTimes(alarm, today)
+    for (const t of unconfirmed) {
+      confirmReminder(alarm.id, today, t.hour, t.minute)
+    }
+    // 异步取消该闹钟的重试提醒
+    cancelRetryAlarms(alarm).catch(() => {})
+  }
+}
+
+/** 取消确认一张信用卡的所有提醒：恢复为待确认状态 */
+export function unconfirmCardReminders(card: CreditCard): void {
+  const allAlarms = loadAlarms()
+  const cardAlarms = allAlarms.filter((a) => card.alarmItemIds.includes(a.id))
+  const today = new Date()
+  for (const alarm of cardAlarms) {
+    unconfirmAllReminders(alarm.id, today)
+  }
 }

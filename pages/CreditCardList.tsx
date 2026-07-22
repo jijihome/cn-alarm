@@ -1,7 +1,7 @@
 // CreditCardList.tsx - 信用卡列表页
 import { useState, useObservable, NavigationStack, List, Section, Text, ForEach, Button, HStack, VStack, Toggle, ContentUnavailableView, Navigation, useEffect } from "scripting"
 import { CreditCard, ReminderTypeConfig } from "../lib/constants"
-import { loadCards, updateCard, getNextDueDate, formatDateCN, syncCardAlarmsById, cancelCardAlarmsById } from "../lib/credit-card"
+import { loadCards, updateCard, getNextDueDate, formatDateCN, syncCardAlarmsById, cancelCardAlarmsById, getCardUnconfirmedCount, confirmCardReminders, unconfirmCardReminders } from "../lib/credit-card"
 import { AddCreditCard } from "./AddCreditCard"
 import { Settings } from "./Settings"
 
@@ -21,7 +21,7 @@ function fmtTime(h: number, m: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
 }
 
-/** 生成提醒类型摘要文字 */
+/** 生成提醒类型摘要文字（含方式标识） */
 function reminderSummary(card: CreditCard): string {
   const rt = card.reminderTypes
   const parts: string[] = []
@@ -29,29 +29,51 @@ function reminderSummary(card: CreditCard): string {
   const adv = migrateRT(rt?.advance)
   const due = migrateRT(rt?.due)
   const buf = migrateRT(rt?.buffer)
-  if (stm.enabled) parts.push(`出账${fmtTime(stm.hour, stm.minute)}`)
-  if (adv.enabled) parts.push(`提前${fmtTime(adv.hour, adv.minute)}`)
-  if (due.enabled) parts.push(`截止${fmtTime(due.hour, due.minute)}`)
-  if (buf.enabled) parts.push(`宽限${fmtTime(buf.hour, buf.minute)}`)
-  return parts.length ? parts.join(" · ") : "无提醒"
+  const typeLabel = (t?: string) => t === "notification" ? "[通知]" : "[闹钟]"
+  if (stm.enabled) parts.push(`出账${fmtTime(stm.hour, stm.minute)}${typeLabel(stm.type)}`)
+  if (adv.enabled) parts.push(`提前${fmtTime(adv.hour, adv.minute)}${typeLabel(adv.type)}`)
+  if (due.enabled) parts.push(`截止${fmtTime(due.hour, due.minute)}${typeLabel(due.type)}`)
+  if (buf.enabled) parts.push(`宽限${fmtTime(buf.hour, buf.minute)}${typeLabel(buf.type)}`)
+  let summary = parts.length ? parts.join(" · ") : "无提醒"
+  // 重试状态
+  if (card.retryConfig?.enabled) {
+    summary += ` · 重复${card.retryConfig.maxRetries}次/${card.retryConfig.intervalMinutes}分`
+  }
+  return summary
 }
 
 /** 按银行名拼音排序加载信用卡 */
 const loadSortedCards = (): CreditCard[] =>
   loadCards().sort((a, b) => a.bankName.localeCompare(b.bankName, "zh"))
 
-function CardRow({ card, onEdit, onToggle }: { card: CreditCard; onEdit: (id: string) => void; onToggle: (id: string, enabled: boolean) => void }) {
+function CardRow({ card, onEdit, onToggle, onConfirm, onUnconfirm }: { card: CreditCard; onEdit: (id: string) => void; onToggle: (id: string, enabled: boolean) => void; onConfirm: (card: CreditCard) => void; onUnconfirm: (card: CreditCard) => void }) {
   const nextDue = getNextDueDate(card)
   const dueStr = formatDateCN(nextDue)
   const now = new Date()
   const daysUntilDue = Math.ceil((nextDue.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+
+  // 确认状态
+  const unconfirmedCount = getCardUnconfirmedCount(card)
+  const hasRetry = !!card.retryConfig?.enabled
+  const hasUnconfirmed = hasRetry && unconfirmedCount > 0
+  const allConfirmed = hasRetry && unconfirmedCount === 0
+
+  // 左滑操作按钮（仅 retryConfig 启用时显示）
+  const leadingActions: { allowsFullSwipe?: boolean; actions: any[] } | undefined =
+    hasRetry ? {
+      actions: hasUnconfirmed
+        ? [<Button key="confirm" title="确认" tint="systemGreen" action={() => onConfirm(card)} />]
+        : [<Button key="unconfirm" title="取消确认" tint="systemOrange" action={() => onUnconfirm(card)} />]
+    } : undefined
 
   return (
     <Toggle
       value={card.enabled}
       onChanged={(val: boolean) => onToggle(card.id, val)}
     >
-      <VStack alignment="leading" spacing={4} onTapGesture={() => onEdit(card.id)}>
+      <VStack alignment="leading" spacing={4} onTapGesture={() => onEdit(card.id)}
+        leadingSwipeActions={leadingActions}
+      >
         <HStack alignment="center" spacing={8}>
           <Text font={16} fontWeight="bold">{card.bankName}</Text>
           <Text font={13} foregroundStyle="secondaryLabel">尾号{card.last4Digits}</Text>
@@ -67,6 +89,12 @@ function CardRow({ card, onEdit, onToggle }: { card: CreditCard; onEdit: (id: st
           )}
         </HStack>
         <Text font={12} foregroundStyle="tertiaryLabel">{reminderSummary(card)}</Text>
+        {hasUnconfirmed && (
+          <Text font={12} foregroundStyle="systemOrange">待确认: {unconfirmedCount}条提醒</Text>
+        )}
+        {allConfirmed && (
+          <Text font={12} foregroundStyle="systemGreen">今日已全部确认</Text>
+        )}
       </VStack>
     </Toggle>
   )
@@ -116,6 +144,22 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
 
   const handleAdd = () => presentEditor()
   const handleEdit = (id: string) => presentEditor(id)
+
+  // 确认信用卡提醒：标记已确认 + 取消重试闹钟
+  const handleConfirm = (card: CreditCard) => {
+    confirmCardReminders(card)
+    setToastMsg(`已确认: ${card.bankName} 尾号${card.last4Digits}`)
+    setToastShown(true)
+    cards.setValue(loadSortedCards())
+  }
+
+  // 取消确认：恢复为待确认状态
+  const handleUnconfirm = (card: CreditCard) => {
+    unconfirmCardReminders(card)
+    setToastMsg(`已取消确认: ${card.bankName} 尾号${card.last4Digits}`)
+    setToastShown(true)
+    cards.setValue(loadSortedCards())
+  }
 
   const handleToggle = (id: string, enabled: boolean) => {
     // 先同步更新本地状态
@@ -184,6 +228,8 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
                   card={card}
                   onEdit={handleEdit}
                   onToggle={handleToggle}
+                  onConfirm={handleConfirm}
+                  onUnconfirm={handleUnconfirm}
                 />
               )}
             />
