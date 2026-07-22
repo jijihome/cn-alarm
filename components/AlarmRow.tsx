@@ -61,33 +61,37 @@ export function AlarmRow({ alarm, onToggle, onEdit, onConfirm, onUnconfirm }: Al
     } : undefined
 
   return (
-    <HStack alignment="center" spacing={8}
-      leadingSwipeActions={leadingActions}
+    <Toggle
+      value={alarm.enabled}
+      onChanged={handleToggle}
     >
-      <Image
-        systemName={MODE_ICONS[alarm.repeat.mode] || "alarm"}
-        foregroundStyle={alarm.tintColor as any}
-        imageScale="medium"
-      />
-      <Toggle value={alarm.enabled} onChanged={handleToggle} />
-      <VStack alignment="leading" spacing={2} onTapGesture={() => onEdit(alarm.id)}>
-        <HStack alignment="firstTextBaseline" spacing={8}>
-          <Text font={28} fontWeight="bold">{timeStr}</Text>
-          <Text font={20} foregroundStyle="secondaryLabel">{alarm.title}{alarm.tag ? ` · ${alarm.tag}` : ""}</Text>
-        </HStack>
-        <Text font={14} foregroundStyle="secondaryLabel">{desc}</Text>
-        {(alarm.reminderTimes && alarm.reminderTimes.length > 0) && (
-          <Text font={12} foregroundStyle="tertiaryLabel">{timePointsStr}</Text>
-        )}
-        {hasUnconfirmed && (
-          <Text font={12} foregroundStyle="systemOrange">
-            待确认: {unconfirmed.map(t => `${String(t.hour).padStart(2, "0")}:${String(t.minute).padStart(2, "0")}`).join(", ")}
-          </Text>
-        )}
-        {allConfirmed && (
-          <Text font={12} foregroundStyle="systemGreen">今日已全部确认</Text>
-        )}
-      </VStack>
-    </HStack>
+      <HStack alignment="center" spacing={8}
+        leadingSwipeActions={leadingActions}
+      >
+        <Image
+          systemName={MODE_ICONS[alarm.repeat.mode] || "alarm"}
+          foregroundStyle={alarm.tintColor as any}
+          imageScale="medium"
+        />
+        <VStack alignment="leading" spacing={2} onTapGesture={() => onEdit(alarm.id)}>
+          <HStack alignment="firstTextBaseline" spacing={8}>
+            <Text font={28} fontWeight="bold">{timeStr}</Text>
+            <Text font={20} foregroundStyle="secondaryLabel">{alarm.title}{alarm.tag ? ` · ${alarm.tag}` : ""}</Text>
+          </HStack>
+          <Text font={14} foregroundStyle="secondaryLabel">{desc}</Text>
+          {(alarm.reminderTimes && alarm.reminderTimes.length > 0) && (
+            <Text font={12} foregroundStyle="tertiaryLabel">{timePointsStr}</Text>
+          )}
+          {hasUnconfirmed && (
+            <Text font={12} foregroundStyle="systemOrange">
+              待确认: {unconfirmed.map(t => `${String(t.hour).padStart(2, "0")}:${String(t.minute).padStart(2, "0")}`).join(", ")}
+            </Text>
+          )}
+          {allConfirmed && (
+            <Text font={12} foregroundStyle="systemGreen">今日已全部确认</Text>
+          )}
+        </VStack>
+      </HStack>
+    </Toggle>
   )
 }
