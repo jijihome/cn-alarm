@@ -61,7 +61,7 @@ export function sortAlarms(alarms: AlarmItem[], sortBy: AlarmSortKey, ascending:
 /** 信用卡排序选项 */
 export const CARD_SORT_OPTIONS: { key: CardSortKey; label: string; reversible: boolean; defaultAsc: boolean }[] = [
   { key: "bank", label: "银行名", reversible: true, defaultAsc: true },
-  { key: "dueDate", label: "还款紧急度", reversible: false, defaultAsc: true },
+  { key: "dueDate", label: "还款日", reversible: true, defaultAsc: true },
   { key: "statementDay", label: "账单日", reversible: true, defaultAsc: true },
   { key: "enabled", label: "启用优先", reversible: false, defaultAsc: false },
 ]
@@ -81,11 +81,11 @@ export function sortCards(cards: CreditCard[], sortBy: CardSortKey, ascending: b
     case "bank":
       return arr.sort((a, b) => dir * a.bankName.localeCompare(b.bankName, "zh"))
     case "dueDate":
-      // 还款紧急度：最近的在前（固定方向，不可反转）
+      // 还款日：最近的在前（升序），远的在前（降序）
       return arr.sort((a, b) => {
         const da = getNextDueDate(a).getTime()
         const db = getNextDueDate(b).getTime()
-        return da - db
+        return dir * (da - db)
       })
     case "statementDay":
       return arr.sort((a, b) => dir * (a.statementDay - b.statementDay))

@@ -2,7 +2,7 @@
 import { useState, useObservable, NavigationStack, List, Section, Text, ForEach, Button, HStack, VStack, Toggle, ContentUnavailableView, Navigation, useEffect } from "scripting"
 import { CreditCard, CardSortKey } from "../lib/constants"
 import { loadCards, updateCard, getNextDueDate, formatDateCN, syncCardAlarmsById, cancelCardAlarmsById, getCardUnconfirmedCount, confirmCardReminders, unconfirmCardReminders } from "../lib/credit-card"
-import { sortCards, CARD_SORT_OPTIONS, cardSortTitle } from "../lib/sort"
+import { sortCards, CARD_SORT_OPTIONS } from "../lib/sort"
 import { loadSettings, saveSettings } from "../lib/alarm-store"
 import { AddCreditCard } from "./AddCreditCard"
 import { Settings } from "./Settings"
@@ -116,17 +116,25 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
     const settings = loadSettings()
     saveSettings({ ...settings, cardSortBy: key, cardSortAsc: newAsc })
     cards.setValue(loadSortedCards(key, newAsc))
+    setToastMsg(`排序: ${opt?.label ?? key}`)
+    setToastShown(true)
   }
 
   // 切换排序方向
   const toggleSortDir = () => {
     const opt = CARD_SORT_OPTIONS.find(o => o.key === currentSort.value)
-    if (!opt?.reversible) return
+    if (!opt?.reversible) {
+      setToastMsg(`当前排序不支持切换方向`)
+      setToastShown(true)
+      return
+    }
     const newAsc = !sortAsc.value
     sortAsc.setValue(newAsc)
     const settings = loadSettings()
     saveSettings({ ...settings, cardSortAsc: newAsc })
     cards.setValue(loadSortedCards(currentSort.value, newAsc))
+    setToastMsg(`${opt?.label ?? currentSort.value} ${newAsc ? "升序" : "降序"}`)
+      setToastShown(true)
   }
 
   // 监听 Tab 切换：切回信用卡 Tab 时重新加载
@@ -220,12 +228,14 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
       <List
         navigationTitle="信用卡"
         toolbar={{
+          topBarLeading: (
+            <Button title="添加" systemImage="plus" action={handleAdd} />
+          ),
           topBarTrailing: (
             <HStack spacing={0}>
-              <Button title="" systemImage="gearshape" action={presentSettings} />
               <Button title="" systemImage="arrow.up.arrow.down" action={() => sortShown.setValue(true)} />
               <Button title="" systemImage={sortAsc.value ? "chevron.up" : "chevron.down"} action={toggleSortDir} />
-              <Button title="添加" systemImage="plus" action={handleAdd} />
+              <Button title="" systemImage="gearshape" action={presentSettings} />
             </HStack>
           ),
         }}
@@ -238,7 +248,7 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
           title: "排序方式",
           isPresented: sortShown,
           actions: <>{CARD_SORT_OPTIONS.map(o =>
-            <Button key={o.key} title={o.key === currentSort.value ? `✓ ${cardSortTitle(o.key, sortAsc.value)}` : cardSortTitle(o.key, sortAsc.value)} action={() => applySort(o.key)} />
+            <Button key={o.key} title={o.key === currentSort.value ? `✓ ${o.label}` : o.label} action={() => applySort(o.key)} />
           )}</>,
         }}
       >
