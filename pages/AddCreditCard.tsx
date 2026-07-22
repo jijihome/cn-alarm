@@ -1,6 +1,6 @@
 // AddCreditCard.tsx - 添加/编辑信用卡页
-import { useObservable, NavigationStack, List, Section, Text, Picker, TextField, Button, Stepper, Toggle, Navigation, useState, HStack, Spacer } from "scripting"
-import { CreditCard, BANK_PRESETS } from "../lib/constants"
+import { useObservable, NavigationStack, List, Section, Text, Picker, TextField, Button, Stepper, Toggle, DatePicker, Navigation, useState, HStack, Spacer } from "scripting"
+import { CreditCard, BANK_PRESETS, ReminderTypeConfig } from "../lib/constants"
 import { createCardSync, updateCard, removeCardSync, syncCardAlarmsById, cancelCardAlarmsById, getCardById } from "../lib/credit-card"
 
 const COLOR_OPTIONS = [
@@ -15,6 +15,32 @@ interface AddCreditCardProps {
   editId?: string
   onSave?: () => void
   onCancel?: () => void
+}
+
+/** 构造当天某个时间的 Date 对象，供 DatePicker 使用 */
+function makeDate(hour: number, minute: number): Date {
+  const d = new Date()
+  d.setHours(hour || 9, minute || 0, 0, 0)
+  return d
+}
+
+/** 从 DatePicker 的 Date 提取 hour/minute */
+function extractTime(d: Date): { hour: number; minute: number } {
+  return { hour: d.getHours(), minute: d.getMinutes() }
+}
+
+/** 默认配置：开启、9:00 */
+const DEFAULT_RT: ReminderTypeConfig = { enabled: true, hour: 9, minute: 0 }
+
+/** 迁移旧 reminderTypes 格式（boolean → ReminderTypeConfig） */
+function migrateRT(raw: any): ReminderTypeConfig {
+  if (typeof raw === "boolean") {
+    return { enabled: raw, hour: 9, minute: 0 }
+  }
+  if (raw && typeof raw === "object" && "enabled" in raw) {
+    return { enabled: raw.enabled, hour: raw.hour ?? 9, minute: raw.minute ?? 0 }
+  }
+  return { ...DEFAULT_RT }
 }
 
 export function AddCreditCard({ editId }: AddCreditCardProps) {
@@ -40,12 +66,16 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
   const remindDaysBefore = useObservable(existing?.remindDaysBefore ?? 3)
   const tintColor = useObservable(existing?.tintColor ?? "systemOrange")
 
-  // 提醒类型开关（兼容旧数据：缺失时全开）
-  const defaultRT = existing?.reminderTypes ?? { statement: true, advance: true, due: true, buffer: true }
-  const rtStatement = useObservable(defaultRT.statement)
-  const rtAdvance = useObservable(defaultRT.advance)
-  const rtDue = useObservable(defaultRT.due)
-  const rtBuffer = useObservable(defaultRT.buffer)
+  // 提醒类型配置（自动迁移旧 boolean 格式 → ReminderTypeConfig）
+  const rawRT = existing?.reminderTypes
+  const stmEnabled = useObservable(migrateRT(rawRT?.statement).enabled)
+  const stmTime = useObservable(makeDate(migrateRT(rawRT?.statement).hour, migrateRT(rawRT?.statement).minute))
+  const advEnabled = useObservable(migrateRT(rawRT?.advance).enabled)
+  const advTime = useObservable(makeDate(migrateRT(rawRT?.advance).hour, migrateRT(rawRT?.advance).minute))
+  const dueEnabled = useObservable(migrateRT(rawRT?.due).enabled)
+  const dueTime = useObservable(makeDate(migrateRT(rawRT?.due).hour, migrateRT(rawRT?.due).minute))
+  const bufEnabled = useObservable(migrateRT(rawRT?.buffer).enabled)
+  const bufTime = useObservable(makeDate(migrateRT(rawRT?.buffer).hour, migrateRT(rawRT?.buffer).minute))
 
   const pickerValue = isCustom.value ? CUSTOM_TAG : bankName.value
 
@@ -74,10 +104,10 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
       remindDaysBefore: remindDaysBefore.value,
       tintColor: tintColor.value,
       reminderTypes: {
-        statement: rtStatement.value,
-        advance: rtAdvance.value,
-        due: rtDue.value,
-        buffer: rtBuffer.value,
+        statement: { enabled: stmEnabled.value, ...extractTime(stmTime.value) },
+        advance: { enabled: advEnabled.value, ...extractTime(advTime.value) },
+        due: { enabled: dueEnabled.value, ...extractTime(dueTime.value) },
+        buffer: { enabled: bufEnabled.value, ...extractTime(bufTime.value) },
       },
     }
 
@@ -192,11 +222,23 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
           </Stepper>
         </Section>
 
-        <Section header={<Text>提醒类型</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">选择需要提醒的日期，关闭的不会生成闹钟</Text>}>
-          <Toggle title="账单已出" value={rtStatement} />
-          <Toggle title={`提前${remindDaysBefore.value}天提醒`} value={rtAdvance} />
-          <Toggle title="还款截止日" value={rtDue} />
-          <Toggle title="宽限期最后一天" value={rtBuffer} />
+        <Section header={<Text>提醒类型</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">选择需要提醒的日期和具体时间，关闭的不会生成闹钟</Text>}>
+          <Toggle title="账单已出" value={stmEnabled} />
+          {stmEnabled.value && (
+            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={stmTime} datePickerStyle="wheel" />
+          )}
+          <Toggle title={`提前${remindDaysBefore.value}天提醒`} value={advEnabled} />
+          {advEnabled.value && (
+            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={advTime} datePickerStyle="wheel" />
+          )}
+          <Toggle title="还款截止日" value={dueEnabled} />
+          {dueEnabled.value && (
+            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={dueTime} datePickerStyle="wheel" />
+          )}
+          <Toggle title="宽限期最后一天" value={bufEnabled} />
+          {bufEnabled.value && (
+            <DatePicker title="提醒时间" displayedComponents={["hourAndMinute"]} value={bufTime} datePickerStyle="wheel" />
+          )}
         </Section>
 
         <Section header={<Text>外观</Text>}>

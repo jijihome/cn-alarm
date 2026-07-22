@@ -90,6 +90,13 @@ export interface AlarmGroup {
   order: number
 }
 
+/** 单个提醒类型配置：开关 + 时间 */
+export interface ReminderTypeConfig {
+  enabled: boolean
+  hour: number
+  minute: number
+}
+
 export interface CreditCard {
   id: string
   bankName: string

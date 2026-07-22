@@ -1,5 +1,5 @@
 // credit-card.ts - 信用卡还款日计算+闹钟生成
-import { STORAGE_KEYS, CreditCard, AlarmItem, BANK_PRESETS } from "./constants"
+import { STORAGE_KEYS, CreditCard, AlarmItem, BANK_PRESETS, ReminderTypeConfig } from "./constants"
 import { generateUUID, addAlarm, updateAlarm, removeAlarm, loadAlarms, saveAlarms, createAlarmItem } from "./alarm-store"
 import { scheduleAlarm, cancelAlarm } from "./alarm-bridge"
 
@@ -77,11 +77,11 @@ export function calculateRemindDate(card: CreditCard, year: number, month: numbe
 }
 
 // ==================== 创建信用卡闹钟 ====================
-function createCardAlarm(card: CreditCard, date: Date, titleSuffix: string, tintColor: string): AlarmItem {
+function createCardAlarm(card: CreditCard, date: Date, titleSuffix: string, tintColor: string, hour: number, minute: number): AlarmItem {
   return createAlarmItem({
     title: `${card.bankName}(${card.last4Digits}) ${titleSuffix}`,
-    hour: 9,
-    minute: 0,
+    hour,
+    minute,
     repeat: {
       mode: "once",
       interval: 1,
@@ -97,13 +97,30 @@ function createCardAlarm(card: CreditCard, date: Date, titleSuffix: string, tint
   })
 }
 
-// 为一张卡生成本月+下月的提醒闹钟（按 reminderTypes 过滤）
+// 为一张卡生成本月+下月的提醒闹钟（按 reminderTypes 过滤+时间）
 export function generateCardAlarms(card: CreditCard): AlarmItem[] {
   const now = new Date()
   const alarms: AlarmItem[] = []
 
-  // 兼容旧数据：reminderTypes 缺失时全开
-  const rt = card.reminderTypes ?? { statement: true, advance: true, due: true, buffer: true }
+  // 兼容旧数据：reminderTypes 缺失时全开 9:00；旧 boolean 格式自动迁移
+  const defaultRT: ReminderTypeConfig = { enabled: true, hour: 9, minute: 0 }
+  function migrateRTField(raw: any): ReminderTypeConfig {
+    if (typeof raw === "boolean") return { enabled: raw, hour: 9, minute: 0 }
+    if (raw && typeof raw === "object" && "enabled" in raw) return { enabled: raw.enabled, hour: raw.hour ?? 9, minute: raw.minute ?? 0 }
+    return defaultRT
+  }
+  const rawRT = card.reminderTypes
+  const rt = rawRT ? {
+    statement: migrateRTField(rawRT.statement),
+    advance: migrateRTField(rawRT.advance),
+    due: migrateRTField(rawRT.due),
+    buffer: migrateRTField(rawRT.buffer),
+  } : {
+    statement: defaultRT,
+    advance: defaultRT,
+    due: defaultRT,
+    buffer: defaultRT,
+  }
 
   let year = now.getFullYear()
   let month = now.getMonth() + 1
@@ -115,17 +132,17 @@ export function generateCardAlarms(card: CreditCard): AlarmItem[] {
     const bufferEnd = calculateBufferEndDate(card, year, month)
 
     // 只生成未来的闹钟，且只生成用户启用的类型
-    if (rt.statement && statementDate > now) {
-      alarms.push(createCardAlarm(card, statementDate, "账单已出", card.tintColor))
+    if (rt.statement.enabled && statementDate > now) {
+      alarms.push(createCardAlarm(card, statementDate, "账单已出", card.tintColor, rt.statement.hour, rt.statement.minute))
     }
-    if (rt.advance && remindDate > now) {
-      alarms.push(createCardAlarm(card, remindDate, `${card.remindDaysBefore}天后还款`, card.tintColor))
+    if (rt.advance.enabled && remindDate > now) {
+      alarms.push(createCardAlarm(card, remindDate, `${card.remindDaysBefore}天后还款`, card.tintColor, rt.advance.hour, rt.advance.minute))
     }
-    if (rt.due && dueDate > now) {
-      alarms.push(createCardAlarm(card, dueDate, "今日还款截止", card.tintColor))
+    if (rt.due.enabled && dueDate > now) {
+      alarms.push(createCardAlarm(card, dueDate, "今日还款截止", card.tintColor, rt.due.hour, rt.due.minute))
     }
-    if (rt.buffer && bufferEnd > now) {
-      alarms.push(createCardAlarm(card, bufferEnd, "宽限期最后一天！", "systemRed"))
+    if (rt.buffer.enabled && bufferEnd > now) {
+      alarms.push(createCardAlarm(card, bufferEnd, "宽限期最后一天！", "systemRed", rt.buffer.hour, rt.buffer.minute))
     }
 
     // 下个月
@@ -183,7 +200,12 @@ export function createCardSync(partial: Partial<CreditCard>): CreditCard {
     enabled: true,
     tintColor: "systemOrange",
     alarmItemIds: [],
-    reminderTypes: { statement: true, advance: true, due: true, buffer: true },
+    reminderTypes: {
+      statement: { enabled: true, hour: 9, minute: 0 },
+      advance: { enabled: true, hour: 9, minute: 0 },
+      due: { enabled: true, hour: 9, minute: 0 },
+      buffer: { enabled: true, hour: 9, minute: 0 },
+    },
     ...partial,
   }
   addCard(card)
