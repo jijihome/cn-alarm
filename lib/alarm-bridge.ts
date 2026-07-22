@@ -15,6 +15,16 @@ async function runScript(scriptName: string, params: Record<string, any>): Promi
   return JSON.parse(match[1])
 }
 
+// ==================== 构建触发时间 Date ====================
+function buildTriggerDate(hour: number, minute: number, specificDate?: Date): Date {
+  const d = new Date()
+  if (specificDate) {
+    d.setTime(specificDate.getTime())
+  }
+  d.setHours(hour, minute, 0, 0)
+  return d
+}
+
 // ==================== 创建闹钟 ====================
 // 根据 AlarmItem 构建 schedule_countdown.ts 参数并调用
 // 支持多时间点 + 未确认重试调度
@@ -26,25 +36,55 @@ export interface ScheduleResult {
 }
 
 export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Promise<ScheduleResult | null> {
-  const mainAlarmId = await scheduleSingleAlarm(alarm, alarm.hour, alarm.minute, specificDate)
-  if (!mainAlarmId) return null
+  const mainType = alarm.mainType ?? "alarm"
+  let mainAlarmId: string | null = null
+  const allAlarmIds: string[] = []
+  const retryIds: string[] = []
 
-  // 为额外时间点调度系统闹钟
-  const allAlarmIds: string[] = [mainAlarmId]
+  // 主时间点
+  if (mainType === "notification") {
+    const nid = await scheduleNotification(
+      `${alarm.id}_main`,
+      alarm.title,
+      alarm.note || alarm.title,
+      buildTriggerDate(alarm.hour, alarm.minute, specificDate)
+    )
+    if (nid) allAlarmIds.push(nid)
+  } else {
+    const aid = await scheduleSingleAlarm(alarm, alarm.hour, alarm.minute, specificDate)
+    if (aid) {
+      mainAlarmId = aid
+      allAlarmIds.push(aid)
+    }
+  }
+
+  // 额外时间点
   if (alarm.reminderTimes && alarm.reminderTimes.length > 0) {
     for (const t of alarm.reminderTimes) {
-      const aid = await scheduleSingleAlarm(alarm, t.hour, t.minute, specificDate)
-      if (aid) allAlarmIds.push(aid)
+      const tType = t.type ?? "alarm"
+      if (tType === "notification") {
+        const nid = await scheduleNotification(
+          `${alarm.id}_extra_${t.hour}_${t.minute}`,
+          alarm.title,
+          alarm.note || alarm.title,
+          buildTriggerDate(t.hour, t.minute, specificDate)
+        )
+        if (nid) allAlarmIds.push(nid)
+      } else {
+        const aid = await scheduleSingleAlarm(alarm, t.hour, t.minute, specificDate)
+        if (aid) allAlarmIds.push(aid)
+      }
     }
   }
 
   // 为每个时间点调度重试提醒（预调度）
-  let retryIds: string[] = []
   if (alarm.retryConfig && alarm.retryConfig.enabled) {
-    retryIds = await scheduleRetries(alarm, specificDate)
+    const rids = await scheduleRetries(alarm, specificDate)
+    retryIds.push(...rids)
   }
 
-  return { mainAlarmId, allAlarmIds, retryIds }
+  if (!mainAlarmId && allAlarmIds.length === 0) return null
+  return { mainAlarmId: mainAlarmId ?? allAlarmIds[0], allAlarmIds, retryIds }
 }
 
 // ==================== 调度单个系统闹钟 ====================
@@ -183,6 +223,20 @@ export async function cancelAllAlarms(alarm: AlarmItem): Promise<void> {
   await cancelRetryAlarms(alarm)
   // 取消所有系统闹钟
   await Promise.all(alarm.alarmIds.map(id => cancelAlarm(id).catch(() => {})))
+  // 取消通知类型的时间点
+  const notifIds: string[] = []
+  const mainType = alarm.mainType ?? "alarm"
+  if (mainType === "notification") {
+    notifIds.push(`${alarm.id}_main`)
+  }
+  if (alarm.reminderTimes) {
+    for (const t of alarm.reminderTimes) {
+      if ((t.type ?? "alarm") === "notification") {
+        notifIds.push(`${alarm.id}_extra_${t.hour}_${t.minute}`)
+      }
+    }
+  }
+  await Promise.all(notifIds.map(id => cancelNotification(id).catch(() => {})))
 }
 
 // ==================== 取消闹钟 ====================

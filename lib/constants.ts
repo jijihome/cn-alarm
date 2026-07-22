@@ -96,7 +96,9 @@ export interface AlarmItem {
   /** 来源标记：undefined/"user"=用户闹钟，"credit_card"=信用卡自动闹钟（不在闹钟列表显示） */
   source?: "user" | "credit_card"
   /** 一天内多个额外提醒时间点（主时间点仍是 hour/minute） */
-  reminderTimes?: { hour: number; minute: number }[]
+  reminderTimes?: { hour: number; minute: number; type?: RetryType }[]
+  /** 主时间点的提醒方式，默认 alarm */
+  mainType?: RetryType
   /** 未确认重试配置 */
   retryConfig?: RetryConfig
   /** 重试闹钟 ID（type=alarm 时存系统闹钟 ID，便于取消） */

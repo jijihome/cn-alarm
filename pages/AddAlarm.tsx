@@ -54,12 +54,12 @@ export function AddAlarm({ editId }: AddAlarmProps) {
   const defaults = existing ? null : loadSettings()
   const gradualWake = useObservable(existing?.gradualWake ?? defaults?.defaultGradualWake ?? false)
 
-  // 所有提醒时间点（统一列表，每项含 id + hour + minute）
+  // 所有提醒时间点（统一列表，每项含 id + hour + minute + type）
   // 第一个元素对应 AlarmItem.hour/minute，其余对应 reminderTimes
-  const allTimes = useObservable<{ id: string; hour: number; minute: number }[]>(() => {
-    const main = { id: "main", hour: existing?.hour ?? 7, minute: existing?.minute ?? 0 }
+  const allTimes = useObservable<{ id: string; hour: number; minute: number; type: RetryType }[]>(() => {
+    const main = { id: "main", hour: existing?.hour ?? 7, minute: existing?.minute ?? 0, type: existing?.mainType ?? "alarm" as RetryType }
     if (existing?.reminderTimes && existing.reminderTimes.length > 0) {
-      const extras = existing.reminderTimes.map((t, i) => ({ id: `t${i}`, hour: t.hour, minute: t.minute }))
+      const extras = existing.reminderTimes.map((t, i) => ({ id: `t${i}`, hour: t.hour, minute: t.minute, type: (t.type ?? "alarm") as RetryType }))
       const all = [main, ...extras]
       all.sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute))
       return all
@@ -87,13 +87,14 @@ export function AddAlarm({ editId }: AddAlarmProps) {
 
     // 从 allTimes 提取主时间 + 额外时间（已排序）
     const sorted = [...allTimes.value].sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute))
-    const mainTime = sorted[0] ?? { hour: 7, minute: 0 }
-    const extraTimes = sorted.slice(1).map(t => ({ hour: t.hour, minute: t.minute }))
+    const mainTime = sorted[0] ?? { hour: 7, minute: 0, type: "alarm" as RetryType }
+    const extraTimes = sorted.slice(1).map(t => ({ hour: t.hour, minute: t.minute, type: t.type }))
 
     const alarmData: Partial<AlarmItem> = {
       title: title.value,
       hour: mainTime.hour,
       minute: mainTime.minute,
+      mainType: mainTime.type,
       repeat: repeatRule.value,
       gradualWake: gradualWake.value,
       preAlertSeconds: preAlertSeconds.value,
@@ -140,7 +141,8 @@ export function AddAlarm({ editId }: AddAlarmProps) {
         >
           <ForEach
             data={allTimes}
-            builder={(item: { id: string; hour: number; minute: number }) => {
+            editActions="delete"
+            builder={(item: { id: string; hour: number; minute: number; type: RetryType }) => {
               const date = new Date()
               date.setHours(item.hour, item.minute, 0, 0)
               const timestamp = date.getTime()
@@ -161,16 +163,21 @@ export function AddAlarm({ editId }: AddAlarmProps) {
                       allTimes.setValue(next)
                     }}
                   />
-                  {allTimes.value.length > 1 && (
-                    <Button
-                      title="删除"
-                      systemImage="minus.circle.fill"
-                      action={() => {
-                        const next = allTimes.value.filter(t => t.id !== item.id)
-                        allTimes.setValue(next)
-                      }}
-                    />
-                  )}
+                  <Picker
+                    title=""
+                    value={item.type as string}
+                    onChanged={(v: string) => {
+                      const next = allTimes.value.map(t =>
+                        t.id === item.id
+                          ? { ...t, type: v as RetryType }
+                          : t
+                      )
+                      allTimes.setValue(next)
+                    }}
+                  >
+                    <Text key="alarm" tag="alarm">闹钟</Text>
+                    <Text key="notification" tag="notification">通知</Text>
+                  </Picker>
                 </HStack>
               )
             }}
@@ -180,7 +187,7 @@ export function AddAlarm({ editId }: AddAlarmProps) {
             systemImage="plus.circle.fill"
             action={() => {
               const id = `t${Date.now()}`
-              allTimes.setValue([...allTimes.value, { id, hour: 12, minute: 0 }])
+              allTimes.setValue([...allTimes.value, { id, hour: 12, minute: 0, type: "alarm" as RetryType }])
             }}
           />
         </Section>
