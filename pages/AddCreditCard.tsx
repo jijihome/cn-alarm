@@ -1,5 +1,5 @@
 // AddCreditCard.tsx - 添加/编辑信用卡页
-import { useObservable, NavigationStack, List, Section, Text, Picker, TextField, Button, Stepper, Toggle, DatePicker, Navigation, useState, HStack, VStack, Spacer } from "scripting"
+import { useObservable, NavigationStack, List, Section, Text, Picker, TextField, Button, Stepper, Toggle, DatePicker, Navigation, useState, HStack, VStack, Spacer, ForEach } from "scripting"
 import { CreditCard, BANK_PRESETS, ReminderTypeConfig, RetryConfig, RetryType } from "../lib/constants"
 import { createCardSync, updateCard, removeCardSync, syncCardAlarmsById, cancelCardAlarmsById, getCardById } from "../lib/credit-card"
 
@@ -30,17 +30,13 @@ function extractTime(d: Date): { hour: number; minute: number } {
 }
 
 /** 默认配置：开启、9:00 */
-const DEFAULT_RT: ReminderTypeConfig = { enabled: true, hour: 9, minute: 0 }
+const DEFAULT_RT: ReminderTypeConfig = { enabled: true, hour: 9, minute: 0, type: "alarm", extraTimes: [] }
 
-/** 迁移旧 reminderTypes 格式（boolean → ReminderTypeConfig），含 type 字段 */
-function migrateRT(raw: any): ReminderTypeConfig {
-  if (typeof raw === "boolean") {
-    return { enabled: raw, hour: 9, minute: 0, type: "alarm" }
-  }
-  if (raw && typeof raw === "object" && "enabled" in raw) {
-    return { enabled: raw.enabled, hour: raw.hour ?? 9, minute: raw.minute ?? 0, type: (raw.type ?? "alarm") as RetryType }
-  }
-  return { ...DEFAULT_RT, type: "alarm" }
+/** 提醒类型行组件：Toggle + 主时间 + 额外时间列表 + 添加按钮 */
+/** 添加额外时间点 */
+function addExtraTime(extras: Observable<{ id: string; hour: number; minute: number; type: string }[]>) {
+  const id = `e${Date.now()}`
+  extras.setValue([...extras.value, { id, hour: 12, minute: 0, type: "alarm" }])
 }
 
 export function AddCreditCard({ editId }: AddCreditCardProps) {
@@ -66,20 +62,31 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
   const remindDaysBefore = useObservable(existing?.remindDaysBefore ?? 3)
   const tintColor = useObservable(existing?.tintColor ?? "systemOrange")
 
-  // 提醒类型配置（自动迁移旧 boolean 格式 → ReminderTypeConfig）
+  // 提醒类型配置（数据已由 loadCards 升级，字段确定存在）
   const rawRT = existing?.reminderTypes
-  const stmEnabled = useObservable(migrateRT(rawRT?.statement).enabled)
-  const stmTime = useObservable(makeDate(migrateRT(rawRT?.statement).hour, migrateRT(rawRT?.statement).minute))
-  const stmType = useObservable<string>(migrateRT(rawRT?.statement).type ?? "alarm")
-  const advEnabled = useObservable(migrateRT(rawRT?.advance).enabled)
-  const advTime = useObservable(makeDate(migrateRT(rawRT?.advance).hour, migrateRT(rawRT?.advance).minute))
-  const advType = useObservable<string>(migrateRT(rawRT?.advance).type ?? "alarm")
-  const dueEnabled = useObservable(migrateRT(rawRT?.due).enabled)
-  const dueTime = useObservable(makeDate(migrateRT(rawRT?.due).hour, migrateRT(rawRT?.due).minute))
-  const dueType = useObservable<string>(migrateRT(rawRT?.due).type ?? "alarm")
-  const bufEnabled = useObservable(migrateRT(rawRT?.buffer).enabled)
-  const bufTime = useObservable(makeDate(migrateRT(rawRT?.buffer).hour, migrateRT(rawRT?.buffer).minute))
-  const bufType = useObservable<string>(migrateRT(rawRT?.buffer).type ?? "alarm")
+  const stmRT = rawRT?.statement ?? DEFAULT_RT
+  const advRT = rawRT?.advance ?? DEFAULT_RT
+  const dueRT = rawRT?.due ?? DEFAULT_RT
+  const bufRT = rawRT?.buffer ?? DEFAULT_RT
+  const stmEnabled = useObservable(stmRT.enabled)
+  const stmTime = useObservable(makeDate(stmRT.hour, stmRT.minute))
+  const stmType = useObservable<string>(stmRT.type ?? "alarm")
+  const advEnabled = useObservable(advRT.enabled)
+  const advTime = useObservable(makeDate(advRT.hour, advRT.minute))
+  const advType = useObservable<string>(advRT.type ?? "alarm")
+  const dueEnabled = useObservable(dueRT.enabled)
+  const dueTime = useObservable(makeDate(dueRT.hour, dueRT.minute))
+  const dueType = useObservable<string>(dueRT.type ?? "alarm")
+  const bufEnabled = useObservable(bufRT.enabled)
+  const bufTime = useObservable(makeDate(bufRT.hour, bufRT.minute))
+  const bufType = useObservable<string>(bufRT.type ?? "alarm")
+
+  // 每种类型的额外时间点（数据已升级，extraTimes 确定存在）
+  type ExtraTimeItem = { id: string; hour: number; minute: number; type: string }
+  const stmExtras = useObservable<ExtraTimeItem[]>(() => (stmRT.extraTimes ?? []).map((t: any, i: number) => ({ id: `s${i}`, hour: t.hour, minute: t.minute, type: (t.type ?? "alarm") as string })))
+  const advExtras = useObservable<ExtraTimeItem[]>(() => (advRT.extraTimes ?? []).map((t: any, i: number) => ({ id: `a${i}`, hour: t.hour, minute: t.minute, type: (t.type ?? "alarm") as string })))
+  const dueExtras = useObservable<ExtraTimeItem[]>(() => (dueRT.extraTimes ?? []).map((t: any, i: number) => ({ id: `d${i}`, hour: t.hour, minute: t.minute, type: (t.type ?? "alarm") as string })))
+  const bufExtras = useObservable<ExtraTimeItem[]>(() => (bufRT.extraTimes ?? []).map((t: any, i: number) => ({ id: `b${i}`, hour: t.hour, minute: t.minute, type: (t.type ?? "alarm") as string })))
 
   // 重试配置（未确认重复提醒）
   const DEFAULT_RETRY: RetryConfig = { enabled: false, intervalMinutes: 5, maxRetries: 3, type: "notification" }
@@ -114,10 +121,10 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
       remindDaysBefore: remindDaysBefore.value,
       tintColor: tintColor.value,
       reminderTypes: {
-        statement: { enabled: stmEnabled.value, ...extractTime(stmTime.value), type: stmType.value as RetryType },
-        advance: { enabled: advEnabled.value, ...extractTime(advTime.value), type: advType.value as RetryType },
-        due: { enabled: dueEnabled.value, ...extractTime(dueTime.value), type: dueType.value as RetryType },
-        buffer: { enabled: bufEnabled.value, ...extractTime(bufTime.value), type: bufType.value as RetryType },
+        statement: { enabled: stmEnabled.value, ...extractTime(stmTime.value), type: stmType.value as RetryType, extraTimes: stmExtras.value.map(t => ({ hour: t.hour, minute: t.minute, type: t.type as RetryType })) },
+        advance: { enabled: advEnabled.value, ...extractTime(advTime.value), type: advType.value as RetryType, extraTimes: advExtras.value.map(t => ({ hour: t.hour, minute: t.minute, type: t.type as RetryType })) },
+        due: { enabled: dueEnabled.value, ...extractTime(dueTime.value), type: dueType.value as RetryType, extraTimes: dueExtras.value.map(t => ({ hour: t.hour, minute: t.minute, type: t.type as RetryType })) },
+        buffer: { enabled: bufEnabled.value, ...extractTime(bufTime.value), type: bufType.value as RetryType, extraTimes: bufExtras.value.map(t => ({ hour: t.hour, minute: t.minute, type: t.type as RetryType })) },
       },
       retryConfig: retryConfig.value,
     }
@@ -233,46 +240,145 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
           </Stepper>
         </Section>
 
-        <Section header={<Text>提醒类型</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">点击时间可修改提醒时刻，选择闹钟或通知方式。关闭的不会生成提醒。</Text>}>
+        <Section header={<Text>提醒类型</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">点击时间可修改提醒时刻，选择闹钟或通知方式。关闭的不会生成提醒。可添加多个时间点，左滑删除。</Text>}>
+          {/* 账单已出 */}
           <Toggle title="账单已出" value={stmEnabled} />
           {stmEnabled.value && (
-            <HStack alignment="center" spacing={8}>
-              <DatePicker title="时间" displayedComponents={["hourAndMinute"]} value={stmTime} datePickerStyle="compact" />
-              <Picker title="方式" value={stmType.value} onChanged={(v: string) => stmType.setValue(v)}>
-                <Text key="alarm" tag="alarm">闹钟</Text>
-                <Text key="notification" tag="notification">通知</Text>
-              </Picker>
-            </HStack>
+            <>
+              <HStack alignment="center" spacing={8}>
+                <DatePicker title="时间" displayedComponents={["hourAndMinute"]} value={stmTime} datePickerStyle="compact" />
+                <Picker title="方式" value={stmType.value} onChanged={(v: string) => stmType.setValue(v)}>
+                  <Text key="alarm" tag="alarm">闹钟</Text>
+                  <Text key="notification" tag="notification">通知</Text>
+                </Picker>
+              </HStack>
+              <ForEach
+                data={stmExtras}
+                editActions="delete"
+                builder={(item: { id: string; hour: number; minute: number; type: string }) => {
+                  const d = new Date(); d.setHours(item.hour, item.minute, 0, 0)
+                  return (
+                    <HStack key={item.id} alignment="center" spacing={8}>
+                      <DatePicker title="" displayedComponents={["hourAndMinute"]} value={d.getTime()} datePickerStyle="compact"
+                        onChanged={(ts: number) => { const nd = new Date(ts); stmExtras.setValue(stmExtras.value.map(t => t.id === item.id ? { ...t, hour: nd.getHours(), minute: nd.getMinutes() } : t)) }}
+                      />
+                      <Picker title="" value={item.type}
+                        onChanged={(v: string) => { stmExtras.setValue(stmExtras.value.map(t => t.id === item.id ? { ...t, type: v } : t)) }}
+                      >
+                        <Text key="alarm" tag="alarm">闹钟</Text>
+                        <Text key="notification" tag="notification">通知</Text>
+                      </Picker>
+                    </HStack>
+                  )
+                }}
+              />
+              <Button title="添加时间点" systemImage="plus.circle.fill" action={() => addExtraTime(stmExtras)} />
+            </>
           )}
+
+          {/* 提前提醒 */}
           <Toggle title={`提前${remindDaysBefore.value}天提醒`} value={advEnabled} />
           {advEnabled.value && (
-            <HStack alignment="center" spacing={8}>
-              <DatePicker title="时间" displayedComponents={["hourAndMinute"]} value={advTime} datePickerStyle="compact" />
-              <Picker title="方式" value={advType.value} onChanged={(v: string) => advType.setValue(v)}>
-                <Text key="alarm" tag="alarm">闹钟</Text>
-                <Text key="notification" tag="notification">通知</Text>
-              </Picker>
-            </HStack>
+            <>
+              <HStack alignment="center" spacing={8}>
+                <DatePicker title="时间" displayedComponents={["hourAndMinute"]} value={advTime} datePickerStyle="compact" />
+                <Picker title="方式" value={advType.value} onChanged={(v: string) => advType.setValue(v)}>
+                  <Text key="alarm" tag="alarm">闹钟</Text>
+                  <Text key="notification" tag="notification">通知</Text>
+                </Picker>
+              </HStack>
+              <ForEach
+                data={advExtras}
+                editActions="delete"
+                builder={(item: { id: string; hour: number; minute: number; type: string }) => {
+                  const d = new Date(); d.setHours(item.hour, item.minute, 0, 0)
+                  return (
+                    <HStack key={item.id} alignment="center" spacing={8}>
+                      <DatePicker title="" displayedComponents={["hourAndMinute"]} value={d.getTime()} datePickerStyle="compact"
+                        onChanged={(ts: number) => { const nd = new Date(ts); advExtras.setValue(advExtras.value.map(t => t.id === item.id ? { ...t, hour: nd.getHours(), minute: nd.getMinutes() } : t)) }}
+                      />
+                      <Picker title="" value={item.type}
+                        onChanged={(v: string) => { advExtras.setValue(advExtras.value.map(t => t.id === item.id ? { ...t, type: v } : t)) }}
+                      >
+                        <Text key="alarm" tag="alarm">闹钟</Text>
+                        <Text key="notification" tag="notification">通知</Text>
+                      </Picker>
+                    </HStack>
+                  )
+                }}
+              />
+              <Button title="添加时间点" systemImage="plus.circle.fill" action={() => addExtraTime(advExtras)} />
+            </>
           )}
+
+          {/* 还款截止日 */}
           <Toggle title="还款截止日" value={dueEnabled} />
           {dueEnabled.value && (
-            <HStack alignment="center" spacing={8}>
-              <DatePicker title="时间" displayedComponents={["hourAndMinute"]} value={dueTime} datePickerStyle="compact" />
-              <Picker title="方式" value={dueType.value} onChanged={(v: string) => dueType.setValue(v)}>
-                <Text key="alarm" tag="alarm">闹钟</Text>
-                <Text key="notification" tag="notification">通知</Text>
-              </Picker>
-            </HStack>
+            <>
+              <HStack alignment="center" spacing={8}>
+                <DatePicker title="时间" displayedComponents={["hourAndMinute"]} value={dueTime} datePickerStyle="compact" />
+                <Picker title="方式" value={dueType.value} onChanged={(v: string) => dueType.setValue(v)}>
+                  <Text key="alarm" tag="alarm">闹钟</Text>
+                  <Text key="notification" tag="notification">通知</Text>
+                </Picker>
+              </HStack>
+              <ForEach
+                data={dueExtras}
+                editActions="delete"
+                builder={(item: { id: string; hour: number; minute: number; type: string }) => {
+                  const d = new Date(); d.setHours(item.hour, item.minute, 0, 0)
+                  return (
+                    <HStack key={item.id} alignment="center" spacing={8}>
+                      <DatePicker title="" displayedComponents={["hourAndMinute"]} value={d.getTime()} datePickerStyle="compact"
+                        onChanged={(ts: number) => { const nd = new Date(ts); dueExtras.setValue(dueExtras.value.map(t => t.id === item.id ? { ...t, hour: nd.getHours(), minute: nd.getMinutes() } : t)) }}
+                      />
+                      <Picker title="" value={item.type}
+                        onChanged={(v: string) => { dueExtras.setValue(dueExtras.value.map(t => t.id === item.id ? { ...t, type: v } : t)) }}
+                      >
+                        <Text key="alarm" tag="alarm">闹钟</Text>
+                        <Text key="notification" tag="notification">通知</Text>
+                      </Picker>
+                    </HStack>
+                  )
+                }}
+              />
+              <Button title="添加时间点" systemImage="plus.circle.fill" action={() => addExtraTime(dueExtras)} />
+            </>
           )}
+
+          {/* 宽限期最后一天 */}
           <Toggle title="宽限期最后一天" value={bufEnabled} />
           {bufEnabled.value && (
-            <HStack alignment="center" spacing={8}>
-              <DatePicker title="时间" displayedComponents={["hourAndMinute"]} value={bufTime} datePickerStyle="compact" />
-              <Picker title="方式" value={bufType.value} onChanged={(v: string) => bufType.setValue(v)}>
-                <Text key="alarm" tag="alarm">闹钟</Text>
-                <Text key="notification" tag="notification">通知</Text>
-              </Picker>
-            </HStack>
+            <>
+              <HStack alignment="center" spacing={8}>
+                <DatePicker title="时间" displayedComponents={["hourAndMinute"]} value={bufTime} datePickerStyle="compact" />
+                <Picker title="方式" value={bufType.value} onChanged={(v: string) => bufType.setValue(v)}>
+                  <Text key="alarm" tag="alarm">闹钟</Text>
+                  <Text key="notification" tag="notification">通知</Text>
+                </Picker>
+              </HStack>
+              <ForEach
+                data={bufExtras}
+                editActions="delete"
+                builder={(item: { id: string; hour: number; minute: number; type: string }) => {
+                  const d = new Date(); d.setHours(item.hour, item.minute, 0, 0)
+                  return (
+                    <HStack key={item.id} alignment="center" spacing={8}>
+                      <DatePicker title="" displayedComponents={["hourAndMinute"]} value={d.getTime()} datePickerStyle="compact"
+                        onChanged={(ts: number) => { const nd = new Date(ts); bufExtras.setValue(bufExtras.value.map(t => t.id === item.id ? { ...t, hour: nd.getHours(), minute: nd.getMinutes() } : t)) }}
+                      />
+                      <Picker title="" value={item.type}
+                        onChanged={(v: string) => { bufExtras.setValue(bufExtras.value.map(t => t.id === item.id ? { ...t, type: v } : t)) }}
+                      >
+                        <Text key="alarm" tag="alarm">闹钟</Text>
+                        <Text key="notification" tag="notification">通知</Text>
+                      </Picker>
+                    </HStack>
+                  )
+                }}
+              />
+              <Button title="添加时间点" systemImage="plus.circle.fill" action={() => addExtraTime(bufExtras)} />
+            </>
           )}
         </Section>
 

@@ -117,13 +117,15 @@ export interface AlarmGroup {
   order: number
 }
 
-/** 单个提醒类型配置：开关 + 时间 + 方式 */
+/** 单个提醒类型配置：开关 + 主时间 + 方式 + 额外时间 */
 export interface ReminderTypeConfig {
   enabled: boolean
   hour: number
   minute: number
   /** 提醒方式：alarm=系统闹钟 / notification=本地通知。默认 alarm（兼容旧数据） */
   type?: RetryType
+  /** 额外提醒时间点（同一天内多次提醒）。缺失=空数组=旧行为 */
+  extraTimes?: { hour: number; minute: number; type?: RetryType }[]
 }
 
 export interface CreditCard {

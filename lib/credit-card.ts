@@ -6,9 +6,58 @@ import { scheduleAlarm, cancelAlarm, cancelAllAlarms, cancelRetryAlarms } from "
 const SHARED = { shared: true }
 
 // ==================== CRUD ====================
+
+/** 升级单张信用卡数据：补齐 type/extraTimes/retryConfig 字段，返回升级后的卡 */
+function upgradeCard(card: CreditCard): { card: CreditCard; changed: boolean } {
+  let changed = false
+
+  // 升级 reminderTypes 的每个子字段
+  const rt = card.reminderTypes
+  if (rt) {
+    for (const key of ["statement", "advance", "due", "buffer"] as const) {
+      const raw = (rt as any)[key]
+      // 旧 boolean 格式 → 完整 ReminderTypeConfig
+      if (typeof raw === "boolean") {
+        (rt as any)[key] = { enabled: raw, hour: 9, minute: 0, type: "alarm" as RetryType, extraTimes: [] }
+        changed = true
+      } else if (raw && typeof raw === "object") {
+        if (raw.type === undefined) { raw.type = "alarm" as RetryType; changed = true }
+        if (raw.extraTimes === undefined) { raw.extraTimes = []; changed = true }
+      }
+    }
+  } else {
+    // reminderTypes 整体缺失 → 补默认值
+    card.reminderTypes = {
+      statement: { enabled: true, hour: 9, minute: 0, type: "alarm", extraTimes: [] },
+      advance: { enabled: true, hour: 9, minute: 0, type: "alarm", extraTimes: [] },
+      due: { enabled: true, hour: 9, minute: 0, type: "alarm", extraTimes: [] },
+      buffer: { enabled: true, hour: 9, minute: 0, type: "alarm", extraTimes: [] },
+    }
+    changed = true
+  }
+
+  // 升级 retryConfig
+  if (card.retryConfig === undefined) {
+    card.retryConfig = { enabled: false, intervalMinutes: 5, maxRetries: 3, type: "notification" }
+    changed = true
+  }
+
+  return { card, changed }
+}
 export function loadCards(): CreditCard[] {
   const data = Storage.get<CreditCard[]>(STORAGE_KEYS.CREDIT_CARDS, SHARED)
-  return data ?? []
+  if (!data || data.length === 0) return []
+  // 数据升级：补齐 type/extraTimes/retryConfig，有变更则写回 Storage
+  let needsSave = false
+  const upgraded = data.map((card) => {
+    const { card: c, changed } = upgradeCard(card)
+    if (changed) needsSave = true
+    return c
+  })
+  if (needsSave) {
+    Storage.set(STORAGE_KEYS.CREDIT_CARDS, upgraded, SHARED)
+  }
+  return upgraded
 }
 
 export function saveCards(cards: CreditCard[]): void {
@@ -103,28 +152,22 @@ export function generateCardAlarms(card: CreditCard): AlarmItem[] {
   const now = new Date()
   const alarms: AlarmItem[] = []
 
-  // 兼容旧数据：reminderTypes 缺失时全开 9:00；旧 boolean 格式自动迁移
-  const defaultRT: ReminderTypeConfig = { enabled: true, hour: 9, minute: 0 }
-  function migrateRTField(raw: any): ReminderTypeConfig {
-    if (typeof raw === "boolean") return { enabled: raw, hour: 9, minute: 0, type: "alarm" }
-    if (raw && typeof raw === "object" && "enabled" in raw) return { enabled: raw.enabled, hour: raw.hour ?? 9, minute: raw.minute ?? 0, type: (raw.type ?? "alarm") as RetryType }
-    return { ...defaultRT, type: "alarm" }
-  }
-  const rawRT = card.reminderTypes
-  const rt = rawRT ? {
-    statement: migrateRTField(rawRT.statement),
-    advance: migrateRTField(rawRT.advance),
-    due: migrateRTField(rawRT.due),
-    buffer: migrateRTField(rawRT.buffer),
-  } : {
-    statement: defaultRT,
-    advance: defaultRT,
-    due: defaultRT,
-    buffer: defaultRT,
-  }
+  // reminderTypes 已由 loadCards 升级，字段确定存在
+  const rt = card.reminderTypes!
 
   let year = now.getFullYear()
   let month = now.getMonth() + 1
+
+  // 为某种类型生成主时间 + 额外时间的所有闹钟
+  function genTypeAlarms(rtConfig: ReminderTypeConfig, date: Date, titleSuffix: string, tintColor: string): void {
+    if (date <= now) return
+    // 主时间
+    alarms.push(createCardAlarm(card, date, titleSuffix, tintColor, rtConfig.hour, rtConfig.minute, rtConfig.type ?? "alarm"))
+    // 额外时间
+    for (const et of rtConfig.extraTimes ?? []) {
+      alarms.push(createCardAlarm(card, date, titleSuffix, tintColor, et.hour, et.minute, et.type ?? "alarm"))
+    }
+  }
 
   for (let i = 0; i < 2; i++) {
     const statementDate = getStatementDate(card, year, month)
@@ -132,19 +175,10 @@ export function generateCardAlarms(card: CreditCard): AlarmItem[] {
     const remindDate = calculateRemindDate(card, year, month)
     const bufferEnd = calculateBufferEndDate(card, year, month)
 
-    // 只生成未来的闹钟，且只生成用户启用的类型
-    if (rt.statement.enabled && statementDate > now) {
-      alarms.push(createCardAlarm(card, statementDate, "账单已出", card.tintColor, rt.statement.hour, rt.statement.minute, rt.statement.type ?? "alarm"))
-    }
-    if (rt.advance.enabled && remindDate > now) {
-      alarms.push(createCardAlarm(card, remindDate, `${card.remindDaysBefore}天后还款`, card.tintColor, rt.advance.hour, rt.advance.minute, rt.advance.type ?? "alarm"))
-    }
-    if (rt.due.enabled && dueDate > now) {
-      alarms.push(createCardAlarm(card, dueDate, "今日还款截止", card.tintColor, rt.due.hour, rt.due.minute, rt.due.type ?? "alarm"))
-    }
-    if (rt.buffer.enabled && bufferEnd > now) {
-      alarms.push(createCardAlarm(card, bufferEnd, "宽限期最后一天！", "systemRed", rt.buffer.hour, rt.buffer.minute, rt.buffer.type ?? "alarm"))
-    }
+    if (rt.statement.enabled) genTypeAlarms(rt.statement, statementDate, "账单已出", card.tintColor)
+    if (rt.advance.enabled) genTypeAlarms(rt.advance, remindDate, `${card.remindDaysBefore}天后还款`, card.tintColor)
+    if (rt.due.enabled) genTypeAlarms(rt.due, dueDate, "今日还款截止", card.tintColor)
+    if (rt.buffer.enabled) genTypeAlarms(rt.buffer, bufferEnd, "宽限期最后一天！", "systemRed")
 
     // 下个月
     month++

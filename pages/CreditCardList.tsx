@@ -1,6 +1,6 @@
 // CreditCardList.tsx - 信用卡列表页
 import { useState, useObservable, NavigationStack, List, Section, Text, ForEach, Button, HStack, VStack, Toggle, ContentUnavailableView, Navigation, useEffect } from "scripting"
-import { CreditCard, ReminderTypeConfig } from "../lib/constants"
+import { CreditCard } from "../lib/constants"
 import { loadCards, updateCard, getNextDueDate, formatDateCN, syncCardAlarmsById, cancelCardAlarmsById, getCardUnconfirmedCount, confirmCardReminders, unconfirmCardReminders } from "../lib/credit-card"
 import { AddCreditCard } from "./AddCreditCard"
 import { Settings } from "./Settings"
@@ -8,13 +8,6 @@ import { Settings } from "./Settings"
 /** 模态弹出设置页 */
 const presentSettings = () =>
   Navigation.present({ element: <Settings />, modalPresentationStyle: "pageSheet" })
-
-/** 迁移旧 boolean 格式 → ReminderTypeConfig */
-function migrateRT(raw: any): ReminderTypeConfig {
-  if (typeof raw === "boolean") return { enabled: raw, hour: 9, minute: 0 }
-  if (raw && typeof raw === "object" && "enabled" in raw) return { enabled: raw.enabled, hour: raw.hour ?? 9, minute: raw.minute ?? 0 }
-  return { enabled: true, hour: 9, minute: 0 }
-}
 
 /** 格式化时间 HH:MM */
 function fmtTime(h: number, m: number): string {
@@ -25,15 +18,14 @@ function fmtTime(h: number, m: number): string {
 function reminderSummary(card: CreditCard): string {
   const rt = card.reminderTypes
   const parts: string[] = []
-  const stm = migrateRT(rt?.statement)
-  const adv = migrateRT(rt?.advance)
-  const due = migrateRT(rt?.due)
-  const buf = migrateRT(rt?.buffer)
   const typeLabel = (t?: string) => t === "notification" ? "[通知]" : "[闹钟]"
-  if (stm.enabled) parts.push(`出账${fmtTime(stm.hour, stm.minute)}${typeLabel(stm.type)}`)
-  if (adv.enabled) parts.push(`提前${fmtTime(adv.hour, adv.minute)}${typeLabel(adv.type)}`)
-  if (due.enabled) parts.push(`截止${fmtTime(due.hour, due.minute)}${typeLabel(due.type)}`)
-  if (buf.enabled) parts.push(`宽限${fmtTime(buf.hour, buf.minute)}${typeLabel(buf.type)}`)
+  const extraCount = (et?: any[]) => et && et.length > 0 ? `+${et.length}` : ""
+  if (rt) {
+    if (rt.statement.enabled) parts.push(`出账${fmtTime(rt.statement.hour, rt.statement.minute)}${typeLabel(rt.statement.type)}${extraCount(rt.statement.extraTimes)}`)
+    if (rt.advance.enabled) parts.push(`提前${fmtTime(rt.advance.hour, rt.advance.minute)}${typeLabel(rt.advance.type)}${extraCount(rt.advance.extraTimes)}`)
+    if (rt.due.enabled) parts.push(`截止${fmtTime(rt.due.hour, rt.due.minute)}${typeLabel(rt.due.type)}${extraCount(rt.due.extraTimes)}`)
+    if (rt.buffer.enabled) parts.push(`宽限${fmtTime(rt.buffer.hour, rt.buffer.minute)}${typeLabel(rt.buffer.type)}${extraCount(rt.buffer.extraTimes)}`)
+  }
   let summary = parts.length ? parts.join(" · ") : "无提醒"
   // 重试状态
   if (card.retryConfig?.enabled) {
