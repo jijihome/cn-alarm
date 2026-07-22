@@ -1,7 +1,7 @@
 // CreditCardList.tsx - 信用卡列表页
-import { useState, useObservable, NavigationStack, List, Section, Text, ForEach, Button, HStack, VStack, Toggle, ContentUnavailableView, Navigation, useEffect } from "scripting"
+import { useState, useObservable, NavigationStack, List, Section, Text, ForEach, Button, HStack, VStack, Toggle, ContentUnavailableView, Navigation, useEffect, EditButton } from "scripting"
 import { CreditCard, CardSortKey } from "../lib/constants"
-import { loadCards, updateCard, getNextDueDate, formatDateCN, syncCardAlarmsById, cancelCardAlarmsById, getCardUnconfirmedCount, confirmCardReminders, unconfirmCardReminders } from "../lib/credit-card"
+import { loadCards, updateCard, getNextDueDate, formatDateCN, syncCardAlarmsById, cancelCardAlarmsById, getCardUnconfirmedCount, confirmCardReminders, unconfirmCardReminders, removeCardSync } from "../lib/credit-card"
 import { sortCards, CARD_SORT_OPTIONS } from "../lib/sort"
 import { loadSettings, saveSettings } from "../lib/alarm-store"
 import { AddCreditCard } from "./AddCreditCard"
@@ -144,6 +144,25 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
     }
   }, [selection.value])
 
+  // 同步 cards Observable → Storage（编辑模式左滑删除后自动触发）
+  const prevCardIdsRef = useObservable<string[]>(() => cards.value.map(c => c.id))
+  useEffect(() => {
+    const currentIds = new Set(cards.value.map(c => c.id))
+    const prevIds = prevCardIdsRef.value
+    const deletedIds = prevIds.filter(id => !currentIds.has(id))
+    if (deletedIds.length > 0) {
+      for (const delId of deletedIds) {
+        // 同步删除 Storage 中的卡+关联闹钟记录
+        removeCardSync(delId)
+        // 异步取消系统闹钟（fire-and-forget）
+        cancelCardAlarmsById(delId).catch(() => {})
+      }
+      setToastMsg(deletedIds.length === 1 ? "信用卡已删除" : `已删除${deletedIds.length}张信用卡`)
+      setToastShown(true)
+    }
+    prevCardIdsRef.setValue(cards.value.map(c => c.id))
+  }, [cards.value])
+
   // 弹出添加/编辑信用卡模态页，关闭后刷新+异步同步闹钟
   const presentEditor = (editId?: string) => {
     Navigation.present({
@@ -229,7 +248,10 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
         navigationTitle="信用卡"
         toolbar={{
           topBarLeading: (
-            <Button title="添加" systemImage="plus" action={handleAdd} />
+            <HStack spacing={0}>
+              <EditButton />
+              <Button title="添加" systemImage="plus" action={handleAdd} />
+            </HStack>
           ),
           topBarTrailing: (
             <HStack spacing={0}>
@@ -264,6 +286,7 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
           <Section>
             <ForEach
               data={cards}
+              editActions="delete"
               builder={(card: CreditCard) => (
                 <CardRow
                   key={card.id}
