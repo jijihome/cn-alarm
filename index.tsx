@@ -3,7 +3,7 @@ import { Script, Navigation, TabView, Tab, Text, useObservable } from "scripting
 import { AlarmList } from "./pages/AlarmList"
 import { CreditCardList } from "./pages/CreditCardList"
 import { Settings } from "./pages/Settings"
-import { initializeDefaults } from "./lib/alarm-store"
+import { initializeDefaults, loadSettings } from "./lib/alarm-store"
 
 function RootView() {
   // Tab 选择状态——各页面订阅它，切回来时重新加载数据
@@ -23,6 +23,22 @@ function RootView() {
     </TabView>
   )
 }
+
+// 后台保活生命周期管理
+// app 切后台时，若用户开启了 backgroundKeepAlive，请求 keepAlive
+Script.onMinimize(() => {
+  const settings = loadSettings()
+  if (settings.backgroundKeepAlive) {
+    BackgroundKeeper.keepAlive().then((ok) => {
+      if (!ok) console.log("[BackgroundKeeper] keepAlive 被系统拒绝")
+    })
+  }
+})
+
+// app 回前台时，释放保活请求（队列里可能还有其他脚本，真正停止取决于队列是否空）
+Script.onResume(() => {
+  BackgroundKeeper.stopKeepAlive()
+})
 
 async function run() {
   // 初始化默认数据

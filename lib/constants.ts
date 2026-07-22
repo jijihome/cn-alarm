@@ -134,6 +134,8 @@ export interface AppSettings {
   defaultPreAlert: number
   defaultSound: string
   defaultRemindDaysBefore: number
+  /** 后台保活：app 切后台时请求 keepAlive，回前台时 stop */
+  backgroundKeepAlive: boolean
 }
 
 // ==================== 默认分组 ====================
@@ -153,6 +155,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultPreAlert: 300,
   defaultSound: "default",
   defaultRemindDaysBefore: 3,
+  backgroundKeepAlive: false,
 }
 
 // ==================== 银行预设 ====================

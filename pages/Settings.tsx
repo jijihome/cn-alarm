@@ -80,6 +80,22 @@ export function Settings({ selection }: { selection: Observable<number> }) {
           </Stepper>
         </Section>
 
+        {/* 后台保活 */}
+        <Section
+          header={<Text>后台保活</Text>}
+          footer={
+            <Text font="footnote" foregroundStyle="systemGray">
+              开启后，App 切换到后台时会尝试保持运行，倒计时卡片可继续刷新。回到前台自动停止保活。⚠️ 持续后台运行会增加电量消耗，系统在内存不足时仍可能终止 App。
+            </Text>
+          }
+        >
+          <Toggle
+            title="后台保活"
+            value={settings.value.backgroundKeepAlive ? true : false}
+            onChanged={(v: boolean) => updateSetting({ backgroundKeepAlive: v })}
+          />
+        </Section>
+
         {/* 数据管理 */}
         <Section header={<Text>数据管理</Text>}>
           <Button action={() => presentPage(<GroupManager />)}>

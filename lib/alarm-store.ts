@@ -134,7 +134,10 @@ export function createGroup(partial: Partial<AlarmGroup>): AlarmGroup {
 
 // ==================== 设置操作 ====================
 export function loadSettings(): AppSettings {
-  return Storage.get<AppSettings>(STORAGE_KEYS.SETTINGS, SHARED) ?? DEFAULT_SETTINGS
+  const stored = Storage.get<AppSettings>(STORAGE_KEYS.SETTINGS, SHARED)
+  if (!stored) return { ...DEFAULT_SETTINGS }
+  // 合并默认值，保证新增字段（如 backgroundKeepAlive）对旧数据兜底
+  return { ...DEFAULT_SETTINGS, ...stored }
 }
 
 export function saveSettings(settings: any): void {
