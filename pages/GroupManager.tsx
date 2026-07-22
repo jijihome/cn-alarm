@@ -1,17 +1,20 @@
 // GroupManager.tsx - 分类管理页（增删改，快捷指令风格图标/颜色选择）
-import { useState, useObservable, NavigationStack, List, Section, Text, Button, HStack, Spacer, TextField, Navigation, ForEach, ContentUnavailableView, Image, Circle, LazyVGrid, VStack, ZStack, RoundedRectangle, useEffect } from "scripting"
+import { useState, useObservable, NavigationStack, List, Section, Text, Button, HStack, Spacer, TextField, Navigation, ForEach, ContentUnavailableView, Image, Circle, VStack, ZStack, RoundedRectangle, ScrollView, useEffect } from "scripting"
 import { AlarmGroup } from "../lib/constants"
 import { loadGroups, saveGroups, addGroup, updateGroup, removeGroup, createGroup } from "../lib/alarm-store"
 import { COLOR_OPTIONS, ICON_CATEGORIES, ALL_ICONS } from "../lib/icon-data"
 
-// 网格列定义：5 列自适应
-const GRID_COLUMNS = [
-  { size: { type: "adaptive" as const, min: 50, max: 60 } },
-  { size: { type: "adaptive" as const, min: 50, max: 60 } },
-  { size: { type: "adaptive" as const, min: 50, max: 60 } },
-  { size: { type: "adaptive" as const, min: 50, max: 60 } },
-  { size: { type: "adaptive" as const, min: 50, max: 60 } },
-]
+// 每行列数
+const COLS = 5
+
+/** 把数组按列数分片为二维数组 */
+function rowsOf<T>(items: T[], cols: number): T[][] {
+  const rows: T[][] = []
+  for (let i = 0; i < items.length; i += cols) {
+    rows.push(items.slice(i, i + cols))
+  }
+  return rows
+}
 
 /** 颜色网格单元格 */
 function ColorCell({ color, selected, onTap }: { color: string; selected: boolean; onTap: () => void }) {
@@ -84,22 +87,23 @@ function GroupEditor({ editId }: { editId?: string }) {
 
   return (
     <NavigationStack>
-      <List
-        navigationTitle={editId ? "编辑分类" : "新建分类"}
-        navigationBarTitleDisplayMode="inline"
-        listStyle="insetGroup"
-        toolbar={{
-          topBarLeading: <Button title="取消" action={() => dismiss({ saved: false })} />,
-          topBarTrailing: <Button title="保存" action={handleSave} />,
-        }}
-        toast={{
-          message: toastMsg,
-          isPresented: toastShown,
-          onChanged: setToastShown,
-        }}
-      >
-        {/* 图标预览 */}
-        <Section>
+      <ScrollView>
+        <VStack
+          navigationTitle={editId ? "编辑分类" : "新建分类"}
+          navigationBarTitleDisplayMode="inline"
+          toolbar={{
+            topBarLeading: <Button title="取消" action={() => dismiss({ saved: false })} />,
+            topBarTrailing: <Button title="保存" action={handleSave} />,
+          }}
+          toast={{
+            message: toastMsg,
+            isPresented: toastShown,
+            onChanged: setToastShown,
+          }}
+          spacing={16}
+          padding={16}
+        >
+          {/* 图标预览 */}
           <HStack alignment="center" spacing={16}>
             <Spacer />
             <ZStack frame={{ width: 72, height: 72 }}>
@@ -108,79 +112,93 @@ function GroupEditor({ editId }: { editId?: string }) {
             </ZStack>
             <Spacer />
           </HStack>
-        </Section>
 
-        {/* 名称 */}
-        <Section header={<Text>名称</Text>}>
-          <TextField
-            title="分类名"
-            value={name.value}
-            onChanged={(v) => name.setValue(v)}
-            prompt="输入分类名称"
-          />
-        </Section>
+          {/* 名称 */}
+          <VStack spacing={4}>
+            <Text font={13} foregroundStyle="secondaryLabel">名称</Text>
+            <TextField
+              title="分类名"
+              value={name.value}
+              onChanged={(v) => name.setValue(v)}
+              prompt="输入分类名称"
+            />
+          </VStack>
 
-        {/* 颜色网格 */}
-        <Section header={<Text>颜色</Text>}>
-          <LazyVGrid columns={GRID_COLUMNS} spacing={8}>
-            {COLOR_OPTIONS.map((c) => (
-              <ColorCell
-                key={c.value}
-                color={c.value}
-                selected={colorValue.value === c.value}
-                onTap={() => colorValue.setValue(c.value)}
-              />
-            ))}
-          </LazyVGrid>
-        </Section>
+          {/* 颜色网格 */}
+          <VStack spacing={4}>
+            <Text font={13} foregroundStyle="secondaryLabel">颜色</Text>
+            <VStack spacing={8}>
+              {rowsOf(COLOR_OPTIONS, COLS).map((row, ri) => (
+                <HStack key={ri} spacing={8}>
+                  {row.map((c) => (
+                    <ColorCell
+                      key={c.value}
+                      color={c.value}
+                      selected={colorValue.value === c.value}
+                      onTap={() => colorValue.setValue(c.value)}
+                    />
+                  ))}
+                </HStack>
+              ))}
+            </VStack>
+          </VStack>
 
-        {/* 搜索栏 */}
-        <Section>
+          {/* 搜索栏 */}
           <TextField
             title="搜索"
             value={searchText}
             onChanged={setSearchText}
             prompt="搜索符号"
           />
-        </Section>
 
-        {/* 图标网格 */}
-        {isSearching ? (
-          <Section header={<Text>搜索结果 ({filteredIcons.length})</Text>}>
-            {filteredIcons.length > 0 ? (
-              <LazyVGrid columns={GRID_COLUMNS} spacing={8}>
-                {filteredIcons.map((icon) => (
-                  <IconCell
-                    key={icon}
-                    icon={icon}
-                    color={colorValue.value}
-                    selected={iconName.value === icon}
-                    onTap={() => iconName.setValue(icon)}
-                  />
-                ))}
-              </LazyVGrid>
-            ) : (
-              <Text foregroundStyle="secondaryLabel">无匹配图标</Text>
-            )}
-          </Section>
-        ) : (
-          ICON_CATEGORIES.map((cat) => (
-            <Section key={cat.name} header={<Text>{cat.name}</Text>}>
-              <LazyVGrid columns={GRID_COLUMNS} spacing={8}>
-                {cat.icons.map((icon) => (
-                  <IconCell
-                    key={icon}
-                    icon={icon}
-                    color={colorValue.value}
-                    selected={iconName.value === icon}
-                    onTap={() => iconName.setValue(icon)}
-                  />
-                ))}
-              </LazyVGrid>
-            </Section>
-          ))
-        )}
-      </List>
+          {/* 图标网格 */}
+          {isSearching ? (
+            <VStack spacing={4}>
+              <Text font={13} foregroundStyle="secondaryLabel">搜索结果 ({filteredIcons.length})</Text>
+              {filteredIcons.length > 0 ? (
+                <VStack spacing={8}>
+                  {rowsOf(filteredIcons, COLS).map((row, ri) => (
+                    <HStack key={ri} spacing={8}>
+                      {row.map((icon) => (
+                        <IconCell
+                          key={icon}
+                          icon={icon}
+                          color={colorValue.value}
+                          selected={iconName.value === icon}
+                          onTap={() => iconName.setValue(icon)}
+                        />
+                      ))}
+                    </HStack>
+                  ))}
+                </VStack>
+              ) : (
+                <Text foregroundStyle="secondaryLabel">无匹配图标</Text>
+              )}
+            </VStack>
+          ) : (
+            ICON_CATEGORIES.map((cat) => (
+              <VStack key={cat.name} spacing={4}>
+                <Text font={13} foregroundStyle="secondaryLabel">{cat.name}</Text>
+                <VStack spacing={8}>
+                  {rowsOf(cat.icons, COLS).map((row, ri) => (
+                    <HStack key={ri} spacing={8}>
+                      {row.map((icon) => (
+                        <IconCell
+                          key={icon}
+                          icon={icon}
+                          color={colorValue.value}
+                          selected={iconName.value === icon}
+                          onTap={() => iconName.setValue(icon)}
+                        />
+                      ))}
+                    </HStack>
+                  ))}
+                </VStack>
+              </VStack>
+            ))
+          )}
+        </VStack>
+      </ScrollView>
     </NavigationStack>
   )
 }

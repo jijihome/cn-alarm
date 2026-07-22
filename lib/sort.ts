@@ -1,6 +1,7 @@
-// sort.ts - 列表排序纯函数（无依赖）
+// sort.ts - 列表排序纯函数
 import { AlarmItem, CreditCard, AlarmSortKey, CardSortKey } from "./constants"
 import { getNextDueDate } from "./credit-card"
+import { getNextTrigger } from "./scheduler"
 
 // ==================== 方向标记 ====================
 
@@ -14,6 +15,7 @@ const DESC = "↓"
 /** 闹钟排序选项（维度 + 是否支持方向切换 + 默认方向） */
 export const ALARM_SORT_OPTIONS: { key: AlarmSortKey; label: string; reversible: boolean; defaultAsc: boolean }[] = [
   { key: "time", label: "时间", reversible: true, defaultAsc: true },
+  { key: "nextTrigger", label: "下次响铃", reversible: true, defaultAsc: true },
   { key: "name", label: "名称", reversible: true, defaultAsc: true },
   { key: "enabled", label: "启用优先", reversible: false, defaultAsc: false },
   { key: "created", label: "创建时间", reversible: true, defaultAsc: false },
@@ -34,6 +36,23 @@ export function sortAlarms(alarms: AlarmItem[], sortBy: AlarmSortKey, ascending:
   switch (sortBy) {
     case "time":
       return arr.sort((a, b) => dir * ((a.hour * 60 + a.minute) - (b.hour * 60 + b.minute)))
+    case "nextTrigger": {
+      // 按下次实际触发时间排序，null（未启用/已过期）排最后
+      const now = new Date()
+      const getTime = (a: AlarmItem) => {
+        const t = getNextTrigger(a, now)
+        return t ? t.getTime() : Infinity // Infinity 保证 null 始终排末尾
+      }
+      return arr.sort((a, b) => {
+        const ta = getTime(a)
+        const tb = getTime(b)
+        // 两者都非 null 时按方向排，任一为 null 时 null 在后
+        if (ta === Infinity && tb === Infinity) return (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute)
+        if (ta === Infinity) return 1
+        if (tb === Infinity) return -1
+        return dir * (ta - tb)
+      })
+    }
     case "name":
       return arr.sort((a, b) => dir * a.title.localeCompare(b.title, "zh"))
     case "enabled":

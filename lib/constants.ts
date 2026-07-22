@@ -28,7 +28,7 @@ export type HolidayAction = "none" | "skip" | "defer"
 export type RetryType = "alarm" | "notification"
 
 /** 闹钟列表排序维度 */
-export type AlarmSortKey = "time" | "name" | "enabled" | "created" | "group"
+export type AlarmSortKey = "time" | "nextTrigger" | "name" | "enabled" | "created" | "group"
 
 /** 信用卡列表排序维度 */
 export type CardSortKey = "bank" | "dueDate" | "statementDay" | "enabled"
