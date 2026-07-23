@@ -34,13 +34,13 @@ interface RepeatSettingsProps {
 }
 
 export function RepeatSettings({ rule }: RepeatSettingsProps) {
-  const mode = rule.value.mode
-  const currentLabel = REPEAT_MODES.find((m) => m.value === mode)?.label ?? ""
-  const summary = formatRepeatDescription(rule.value)
+  // 直接在 JSX 中读 rule.value，确保 Scripting 响应式追踪捕获依赖
+  // 不用 const 中间变量（函数体顶层读取 .value 可能不被依赖追踪系统捕获）
 
   const presentSettingsPage = () => {
+    const currentMode = rule.value.mode
     const element = (() => {
-      switch (mode) {
+      switch (currentMode) {
         case "once": return <OnceRepeatPage rule={rule} />
         case "daily": return <DailyRepeatPage rule={rule} />
         case "weekly": return <WeeklyRepeatPage rule={rule} />
@@ -76,7 +76,7 @@ export function RepeatSettings({ rule }: RepeatSettingsProps) {
           <HStack alignment="center">
             <Text>模式</Text>
             <Spacer />
-            <Text foregroundStyle="secondaryLabel">{currentLabel}</Text>
+            <Text foregroundStyle="secondaryLabel">{REPEAT_MODES.find((m) => m.value === rule.value.mode)?.label ?? ""}</Text>
             <Image systemName="chevron.right" imageScale="small" foregroundStyle="tertiaryLabel" />
           </HStack>
         </Button>
@@ -84,13 +84,13 @@ export function RepeatSettings({ rule }: RepeatSettingsProps) {
           <HStack alignment="center">
             <Text>设置</Text>
             <Spacer />
-            <Text foregroundStyle="secondaryLabel">{summary}</Text>
+            <Text foregroundStyle="secondaryLabel">{formatRepeatDescription(rule.value)}</Text>
             <Image systemName="chevron.right" imageScale="small" foregroundStyle="tertiaryLabel" />
           </HStack>
         </Button>
       </Section>
       {/* once 模式不需要结束条件（本身一次性） */}
-      {mode !== "once" && <EndConditionPicker rule={rule} />}
+      {rule.value.mode !== "once" && <EndConditionPicker rule={rule} />}
     </>
   )
 }
