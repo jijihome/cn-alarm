@@ -1,53 +1,33 @@
-// WeeklyRepeatPage.tsx - 每周模式专属设置页
-import { useObservable, List, Section, Text, Stepper, HStack, Spacer, NavigationStack, Button, Navigation } from "scripting"
+// WeeklyRepeatPage.tsx - 每周模式内联 Section 片段
+import { Section, Text, Stepper, HStack, Spacer } from "scripting"
 import { RepeatRule, HolidayAction } from "../../lib/constants"
 import { WeekdayPicker } from "../WeekdayPicker"
 import { HolidayActionPicker } from "./HolidayActionPicker"
 
 const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"]
 
-interface WeeklyRepeatPageProps {
+interface WeeklyRepeatSectionProps {
   rule: Observable<RepeatRule>
 }
 
-export function WeeklyRepeatPage({ rule }: WeeklyRepeatPageProps) {
-  const dismiss = Navigation.useDismiss()
-  const init = rule.value
-  const interval = useObservable(init.interval ?? 1)
-  const weekdays = useObservable<number[]>(init.weekdays ?? [2, 3, 4, 5, 6])
-  const holidayAction = useObservable<HolidayAction>(init.holidayAction ?? "none")
+export function WeeklyRepeatSection({ rule }: WeeklyRepeatSectionProps) {
+  const r = rule.value
+  const interval = r.interval ?? 1
+  const weekdays = r.weekdays ?? [2, 3, 4, 5, 6]
 
-  const sync = () => {
-    rule.setValue({
-      mode: "weekly",
-      interval: interval.value,
-      weekdays: weekdays.value,
-      holidayAction: holidayAction.value,
-    })
-  }
-
-  // 星期摘要
-  const weekdaySummary = weekdays.value
-    .sort((a, b) => a - b)
-    .map((d) => WEEKDAY_LABELS[d - 1])
+  const weekdaySummary = weekdays
+    .sort((a: number, b: number) => a - b)
+    .map((d: number) => WEEKDAY_LABELS[d - 1])
     .join("、")
 
   return (
-    <NavigationStack>
-      <List
-        navigationTitle="每周"
-        navigationBarTitleDisplayMode="inline"
-        toolbar={{
-          topBarLeading: <Button title="完成" action={() => dismiss()} />,
-        }}
-      >
+    <>
       <Section header={<Text>选择星期</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">已选：{weekdaySummary}</Text>}>
         <WeekdayPicker
-          value={weekdays.value}
-          onChanged={(v) => {
+          value={weekdays}
+          onChanged={(v: number[]) => {
             if (v.length > 0) {
-              weekdays.setValue(v)
-              sync()
+              rule.setValue({ ...r, weekdays: v })
             }
           }}
         />
@@ -55,22 +35,21 @@ export function WeeklyRepeatPage({ rule }: WeeklyRepeatPageProps) {
 
       <Section header={<Text>间隔</Text>}>
         <Stepper
-          onIncrement={() => { interval.setValue(Math.min(4, interval.value + 1)); sync() }}
-          onDecrement={() => { interval.setValue(Math.max(1, interval.value - 1)); sync() }}
+          onIncrement={() => rule.setValue({ ...r, interval: Math.min(4, interval + 1) })}
+          onDecrement={() => rule.setValue({ ...r, interval: Math.max(1, interval - 1) })}
         >
           <HStack alignment="center">
             <Text>间隔</Text>
             <Spacer />
-            <Text foregroundStyle="secondaryLabel">每{interval.value}{interval.value === 1 ? "周" : "周"}</Text>
+            <Text foregroundStyle="secondaryLabel">每{interval}周</Text>
           </HStack>
         </Stepper>
       </Section>
 
       <HolidayActionPicker
-        value={holidayAction.value}
-        onChanged={(v) => { holidayAction.setValue(v); sync() }}
+        value={r.holidayAction ?? "none"}
+        onChanged={(v: HolidayAction) => rule.setValue({ ...r, holidayAction: v })}
       />
-      </List>
-    </NavigationStack>
+    </>
   )
 }

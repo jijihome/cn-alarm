@@ -1,9 +1,7 @@
-// MonthlyRepeatPage.tsx - 每月模式专属设置页
+// MonthlyRepeatPage.tsx - 每月模式内联 Section 片段
 // 支持两种子模式：按日期（每月N号，支持多选） / 按星期（每月第N周星期X）
-// 状态模式：useObservable + subscribe 监听变化触发 sync
-import { useObservable, useEffect, List, Section, Text, Picker, NavigationLink, HStack, Spacer, NavigationStack, Button, Navigation } from "scripting"
-import { RepeatRule, MonthlySubMode, HolidayAction, getDaysOfMonth } from "../../lib/constants"
-import { WEEKDAY_LABELS } from "../../lib/constants"
+import { useObservable, Section, Text, Picker, NavigationLink, HStack, Spacer } from "scripting"
+import { RepeatRule, MonthlySubMode, HolidayAction, getDaysOfMonth, WEEKDAY_LABELS } from "../../lib/constants"
 import { HolidayActionPicker } from "./HolidayActionPicker"
 import { DayOfMonthPicker, formatDaysOfMonth } from "../DayOfMonthPicker"
 
@@ -13,70 +11,46 @@ const WEEKDAY_PICKER_LABELS = WEEKDAY_LABELS.map((l) => `星期${l}`)
 const SUB_MODE_LABELS = ["按日期", "按星期"]
 const SUB_MODE_VALUES: MonthlySubMode[] = ["day", "weekday"]
 
-interface MonthlyRepeatPageProps {
+interface MonthlyRepeatSectionProps {
   rule: Observable<RepeatRule>
 }
 
-export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
-  const dismiss = Navigation.useDismiss()
-  const init = rule.value
-  const initialSubModeIdx = SUB_MODE_VALUES.indexOf(init.monthlySubMode ?? "day")
+export function MonthlyRepeatSection({ rule }: MonthlyRepeatSectionProps) {
+  const r = rule.value
+  // 子模式索引需要 useObservable（字符串→数字映射）
+  const initialSubModeIdx = SUB_MODE_VALUES.indexOf(r.monthlySubMode ?? "day")
   const subModeIdx = useObservable(initialSubModeIdx >= 0 ? initialSubModeIdx : 0)
-  const daysOfMonth = useObservable<number[]>(getDaysOfMonth(init))
-  const weekOfMonth = useObservable(init.weekOfMonth ?? 1)
-  const weekdayOfMonth = useObservable(init.weekdayOfMonth ?? 2)
-  const holidayAction = useObservable<HolidayAction>(init.holidayAction ?? "none")
+  const subMode = SUB_MODE_VALUES[subModeIdx.value]
 
-  // sync: 将本地 Observable 状态写入 rule
-  const sync = () => {
-    const subMode = SUB_MODE_VALUES[subModeIdx.value]
+  const updateRule = (updates: Partial<RepeatRule>) => {
+    rule.setValue({ ...r, ...updates })
+  }
+
+  // 子模式切换时重建 rule
+  const handleSubModeChange = (idx: number) => {
+    subModeIdx.setValue(idx)
+    const newSubMode = SUB_MODE_VALUES[idx]
     const newRule: RepeatRule = {
       mode: "monthly",
       interval: 1,
-      monthlySubMode: subMode,
-      holidayAction: holidayAction.value,
+      monthlySubMode: newSubMode,
+      holidayAction: r.holidayAction,
     }
-    if (subMode === "day") {
-      newRule.daysOfMonth = daysOfMonth.value
+    if (newSubMode === "day") {
+      newRule.daysOfMonth = getDaysOfMonth(r)
     } else {
-      newRule.weekOfMonth = weekOfMonth.value
-      newRule.weekdayOfMonth = weekdayOfMonth.value
+      newRule.weekOfMonth = r.weekOfMonth ?? 1
+      newRule.weekdayOfMonth = r.weekdayOfMonth ?? 2
     }
     rule.setValue(newRule)
   }
 
-  // 订阅所有本地 Observable，任意变化时触发 sync
-  useEffect(() => {
-    const onLocalChange = () => { sync() }
-    subModeIdx.subscribe(onLocalChange)
-    daysOfMonth.subscribe(onLocalChange)
-    weekOfMonth.subscribe(onLocalChange)
-    weekdayOfMonth.subscribe(onLocalChange)
-    holidayAction.subscribe(onLocalChange)
-    return () => {
-      subModeIdx.unsubscribe(onLocalChange)
-      daysOfMonth.unsubscribe(onLocalChange)
-      weekOfMonth.unsubscribe(onLocalChange)
-      weekdayOfMonth.unsubscribe(onLocalChange)
-      holidayAction.unsubscribe(onLocalChange)
-    }
-  }, [])
-
-  const subMode = SUB_MODE_VALUES[subModeIdx.value]
-
   return (
-    <NavigationStack>
-      <List
-        navigationTitle="每月"
-        navigationBarTitleDisplayMode="inline"
-        toolbar={{
-          topBarLeading: <Button title="完成" action={() => dismiss()} />,
-        }}
-      >
+    <>
       <Section header={<Text>选择方式</Text>}>
         <Picker
           title="方式"
-          value={subModeIdx as any}
+          value={subModeIdx}
         >
           {SUB_MODE_LABELS.map((label, idx) => <Text key={idx} tag={idx}>{label}</Text>)}
         </Picker>
@@ -85,12 +59,12 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
       {subMode === "day" ? (
         <Section header={<Text>选择日期</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">2月无29/30/31号时将自动取当月最后一天</Text>}>
           <NavigationLink
-            destination={<DayOfMonthPicker value={daysOfMonth.value} onChanged={(v) => { daysOfMonth.setValue(v); sync() }} />}
+            destination={<DayOfMonthPicker value={getDaysOfMonth(r)} onChanged={(v: number[]) => updateRule({ daysOfMonth: v })} />}
           >
             <HStack alignment="center">
               <Text>已选日期</Text>
               <Spacer />
-              <Text foregroundStyle="secondaryLabel">{formatDaysOfMonth(daysOfMonth.value)}</Text>
+              <Text foregroundStyle="secondaryLabel">{formatDaysOfMonth(getDaysOfMonth(r))}</Text>
             </HStack>
           </NavigationLink>
         </Section>
@@ -98,13 +72,15 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
         <Section header={<Text>选择星期</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">最后一周=该月最后一个该星期几</Text>}>
           <Picker
             title="第几周"
-            value={weekOfMonth as any}
+            value={r.weekOfMonth ?? 1}
+            onChanged={(v: number) => updateRule({ weekOfMonth: v })}
           >
             {WEEK_OF_MONTH_LABELS.map((label, idx) => <Text key={idx} tag={WEEK_OF_MONTH_VALUES[idx]}>{label}</Text>)}
           </Picker>
           <Picker
             title="星期几"
-            value={weekdayOfMonth as any}
+            value={r.weekdayOfMonth ?? 2}
+            onChanged={(v: number) => updateRule({ weekdayOfMonth: v })}
           >
             {WEEKDAY_PICKER_LABELS.map((label, idx) => <Text key={idx} tag={idx + 1}>{label}</Text>)}
           </Picker>
@@ -112,10 +88,9 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
       )}
 
       <HolidayActionPicker
-        value={holidayAction.value}
-        onChanged={(v) => { holidayAction.setValue(v) }}
+        value={r.holidayAction ?? "none"}
+        onChanged={(v: HolidayAction) => updateRule({ holidayAction: v })}
       />
-      </List>
-    </NavigationStack>
+    </>
   )
 }

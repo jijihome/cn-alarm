@@ -1,5 +1,5 @@
-// LunarRepeatPage.tsx - 农历每年模式专属设置页
-import { useObservable, List, Section, Text, Picker, NavigationStack, Button, Navigation } from "scripting"
+// LunarRepeatPage.tsx - 农历每年模式内联 Section 片段
+import { Section, Text, Picker } from "scripting"
 import { RepeatRule, HolidayAction } from "../../lib/constants"
 import { HolidayActionPicker } from "./HolidayActionPicker"
 
@@ -21,58 +21,42 @@ const LUNAR_DAY_LABELS = Array.from({ length: 30 }, (_, i) => {
   return names[d] ?? `${d}日`
 })
 
-interface LunarRepeatPageProps {
+interface LunarRepeatSectionProps {
   rule: Observable<RepeatRule>
 }
 
-export function LunarRepeatPage({ rule }: LunarRepeatPageProps) {
-  const dismiss = Navigation.useDismiss()
-  const init = rule.value
-  const lunarMonth = useObservable(init.lunarMonth ?? 1)
-  const lunarDay = useObservable(init.lunarDay ?? 1)
-  const holidayAction = useObservable<HolidayAction>(init.holidayAction ?? "none")
+export function LunarRepeatSection({ rule }: LunarRepeatSectionProps) {
+  const r = rule.value
+  const lunarMonth = r.lunarMonth ?? 1
+  const lunarDay = r.lunarDay ?? 1
 
-  const sync = () => {
-    rule.setValue({
-      mode: "lunar_yearly",
-      interval: 1,
-      lunarMonth: lunarMonth.value,
-      lunarDay: lunarDay.value,
-      holidayAction: holidayAction.value,
-    })
+  const updateRule = (updates: Partial<RepeatRule>) => {
+    rule.setValue({ ...r, ...updates })
   }
 
   return (
-    <NavigationStack>
-      <List
-        navigationTitle="农历每年"
-        navigationBarTitleDisplayMode="inline"
-        toolbar={{
-          topBarLeading: <Button title="完成" action={() => dismiss()} />,
-        }}
-      >
+    <>
       <Section header={<Text>农历日期</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">系统将自动换算为对应的公历日期</Text>}>
         <Picker
           title="农历月"
-          value={lunarMonth as any}
-          onChanged={() => { sync() }}
+          value={lunarMonth}
+          onChanged={(v: number) => updateRule({ lunarMonth: v })}
         >
           {LUNAR_MONTH_LABELS.map((label, idx) => <Text key={idx} tag={idx + 1}>{label}</Text>)}
         </Picker>
         <Picker
           title="农历日"
-          value={lunarDay as any}
-          onChanged={() => { sync() }}
+          value={lunarDay}
+          onChanged={(v: number) => updateRule({ lunarDay: v })}
         >
           {LUNAR_DAY_LABELS.map((label, idx) => <Text key={idx} tag={idx + 1}>{label}</Text>)}
         </Picker>
       </Section>
 
       <HolidayActionPicker
-        value={holidayAction.value}
-        onChanged={(v) => { holidayAction.setValue(v); sync() }}
+        value={r.holidayAction ?? "none"}
+        onChanged={(v: HolidayAction) => updateRule({ holidayAction: v })}
       />
-      </List>
-    </NavigationStack>
+    </>
   )
 }

@@ -1,53 +1,35 @@
-// DailyRepeatPage.tsx - 每天模式专属设置页
-import { useObservable, List, Section, Text, Stepper, HStack, Spacer, NavigationStack, Button, Navigation } from "scripting"
+// DailyRepeatPage.tsx - 每天模式内联 Section 片段
+import { Section, Text, Stepper, HStack, Spacer } from "scripting"
 import { RepeatRule, HolidayAction } from "../../lib/constants"
 import { HolidayActionPicker } from "./HolidayActionPicker"
 
-interface DailyRepeatPageProps {
+interface DailyRepeatSectionProps {
   rule: Observable<RepeatRule>
 }
 
-export function DailyRepeatPage({ rule }: DailyRepeatPageProps) {
-  const dismiss = Navigation.useDismiss()
-  const init = rule.value
-  const interval = useObservable(init.interval ?? 1)
-  const holidayAction = useObservable<HolidayAction>(init.holidayAction ?? "none")
-
-  const sync = () => {
-    rule.setValue({
-      mode: "daily",
-      interval: interval.value,
-      holidayAction: holidayAction.value,
-    })
-  }
+export function DailyRepeatSection({ rule }: DailyRepeatSectionProps) {
+  const r = rule.value
+  const interval = r.interval ?? 1
 
   return (
-    <NavigationStack>
-      <List
-        navigationTitle="每天"
-        navigationBarTitleDisplayMode="inline"
-        toolbar={{
-          topBarLeading: <Button title="完成" action={() => dismiss()} />,
-        }}
-      >
+    <>
       <Section header={<Text>间隔</Text>}>
         <Stepper
-          onIncrement={() => { interval.setValue(Math.min(30, interval.value + 1)); sync() }}
-          onDecrement={() => { interval.setValue(Math.max(1, interval.value - 1)); sync() }}
+          onIncrement={() => rule.setValue({ ...r, interval: Math.min(30, interval + 1) })}
+          onDecrement={() => rule.setValue({ ...r, interval: Math.max(1, interval - 1) })}
         >
           <HStack alignment="center">
             <Text>间隔</Text>
             <Spacer />
-            <Text foregroundStyle="secondaryLabel">每{interval.value}天</Text>
+            <Text foregroundStyle="secondaryLabel">每{interval}天</Text>
           </HStack>
         </Stepper>
       </Section>
 
       <HolidayActionPicker
-        value={holidayAction.value}
-        onChanged={(v) => { holidayAction.setValue(v); sync() }}
+        value={r.holidayAction ?? "none"}
+        onChanged={(v: HolidayAction) => rule.setValue({ ...r, holidayAction: v })}
       />
-      </List>
-    </NavigationStack>
+    </>
   )
 }
