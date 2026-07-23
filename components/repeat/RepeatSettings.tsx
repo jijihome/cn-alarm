@@ -1,10 +1,10 @@
 // RepeatSettings.tsx - 重复模式设置
 // 交互设计：
 //   1. "模式" 行 → Button + Navigation.present 模态弹出模式选择页
+//   2. "设置" 行 → Button + Navigation.present 模态弹出当前模式的专属设置页
 //      （NavigationLink push 的页面修改 Observable 后 dismiss 回来父页面不重渲染，
-//       改用 present + dismiss 返回值 + .then() 回调更新 rule）
-//   2. "设置" 行 → NavigationLink push 到当前模式的专属设置页
-import { Text, List, Section, NavigationLink, NavigationStack, Button, Navigation, HStack, Spacer, Image } from "scripting"
+//       改用 present + dismiss + .then() 回调触发 rule.setValue 强制重渲染）
+import { Text, List, Section, NavigationStack, Button, Navigation, HStack, Spacer, Image } from "scripting"
 import { RepeatMode, RepeatRule } from "../../lib/constants"
 import { formatRepeatDescription } from "../../lib/scheduler"
 import { buildRepeatRule } from "../../lib/repeat-rule-builder"
@@ -38,17 +38,25 @@ export function RepeatSettings({ rule }: RepeatSettingsProps) {
   const currentLabel = REPEAT_MODES.find((m) => m.value === mode)?.label ?? ""
   const summary = formatRepeatDescription(rule.value)
 
-  const settingsDestination = (() => {
-    switch (mode) {
-      case "once": return <OnceRepeatPage rule={rule} />
-      case "daily": return <DailyRepeatPage rule={rule} />
-      case "weekly": return <WeeklyRepeatPage rule={rule} />
-      case "monthly": return <MonthlyRepeatPage rule={rule} />
-      case "yearly": return <YearlyRepeatPage rule={rule} />
-      case "lunar_yearly": return <LunarRepeatPage rule={rule} />
-      case "workday": return <WorkdayRepeatPage rule={rule} />
-    }
-  })()
+  const presentSettingsPage = () => {
+    const element = (() => {
+      switch (mode) {
+        case "once": return <OnceRepeatPage rule={rule} />
+        case "daily": return <DailyRepeatPage rule={rule} />
+        case "weekly": return <WeeklyRepeatPage rule={rule} />
+        case "monthly": return <MonthlyRepeatPage rule={rule} />
+        case "yearly": return <YearlyRepeatPage rule={rule} />
+        case "lunar_yearly": return <LunarRepeatPage rule={rule} />
+        case "workday": return <WorkdayRepeatPage rule={rule} />
+      }
+    })()
+    Navigation.present({
+      element,
+    }).then(() => {
+      // dismiss 回来后触发 rule 重渲染（设置页已直接修改 rule Observable）
+      rule.setValue({ ...rule.value })
+    })
+  }
 
   const presentModePicker = () => {
     Navigation.present({
@@ -72,15 +80,14 @@ export function RepeatSettings({ rule }: RepeatSettingsProps) {
             <Image systemName="chevron.right" imageScale="small" foregroundStyle="tertiaryLabel" />
           </HStack>
         </Button>
-        <NavigationLink
-          destination={settingsDestination}
-        >
+        <Button action={presentSettingsPage}>
           <HStack alignment="center">
             <Text>设置</Text>
             <Spacer />
             <Text foregroundStyle="secondaryLabel">{summary}</Text>
+            <Image systemName="chevron.right" imageScale="small" foregroundStyle="tertiaryLabel" />
           </HStack>
-        </NavigationLink>
+        </Button>
       </Section>
       {/* once 模式不需要结束条件（本身一次性） */}
       {mode !== "once" && <EndConditionPicker rule={rule} />}

@@ -116,10 +116,17 @@ async function scheduleSingleAlarm(
     metadata: { alarmItemId: alarm.id, hour: String(hour), minute: String(minute) },
   }
 
-  // 渐进唤醒：preAlert 为用户设置的提前秒数，postAlert 为正式响铃持续时长
+  // 渐进唤醒：preAlert 为正式响铃前的倒计时秒数，postAlert 为正式响铃持续时长
   // 非渐进唤醒：也需要至少一个 alert 参数（schedule_countdown 硬性要求）
   // 用 postAlert=60 表示正式响铃后 60 秒自动停止
-  if (alarm.gradualWake && alarm.preAlertSeconds > 0) {
+  //
+  // ⚠️ AlarmManager.Countdown 的 preAlert 语义是「从 schedule 触发时刻开始，
+  // 先进入 preAlert 秒的倒计时阶段，然后才进入正式响铃（postAlert 秒）」。
+  // 即 schedule 触发 ≠ 正式响铃，正式响铃 = schedule 触发 + preAlert 秒。
+  // 用户期望「到设定时间正式响铃」，所以 schedule 时间需提前 preAlert 秒。
+  // 修正后：scheduleTime = userTime - preAlert → preAlert 秒倒计时 → 正式响铃
+  const useGradual = alarm.gradualWake && alarm.preAlertSeconds > 0
+  if (useGradual) {
     params.preAlert = alarm.preAlertSeconds
     params.postAlert = 60
   } else {
@@ -128,26 +135,41 @@ async function scheduleSingleAlarm(
 
   if (alarm.repeat.mode === "weekly" && alarm.repeat.weekdays) {
     // 每周重复：用 weekly schedule
+    // weekly 用 hour/minute 指定触发时间，无法用秒级偏移
+    // 渐进唤醒时，把 hour/minute 提前 preAlert 秒（可能跨天/跨小时）
     params.scheduleType = "weekly"
-    params.hour = hour
-    params.minute = minute
+    const offsetSec = useGradual ? alarm.preAlertSeconds : 0
+    const baseDate = new Date()
+    baseDate.setHours(hour, minute, 0, 0)
+    baseDate.setSeconds(baseDate.getSeconds() - offsetSec)
+    params.hour = baseDate.getHours()
+    params.minute = baseDate.getMinutes()
     params.weekdays = alarm.repeat.weekdays
   } else if (specificDate) {
     // 一次性：用 fixed schedule
+    // 渐进唤醒时，schedule 时间提前 preAlert 秒
+    const offsetSec = useGradual ? alarm.preAlertSeconds : 0
     const isoDate = new Date(
       specificDate.getFullYear(),
       specificDate.getMonth(),
       specificDate.getDate(),
       hour,
-      minute
-    ).toISOString()
+      minute,
+      0
+    )
+    isoDate.setSeconds(isoDate.getSeconds() - offsetSec)
     params.scheduleType = "fixed"
-    params.date = isoDate
+    params.date = isoDate.toISOString()
   } else {
     // 默认：relative schedule（每天）
+    // 渐进唤醒时，把 hour/minute 提前 preAlert 秒（可能跨天/跨小时）
+    const offsetSec = useGradual ? alarm.preAlertSeconds : 0
+    const baseDate = new Date()
+    baseDate.setHours(hour, minute, 0, 0)
+    baseDate.setSeconds(baseDate.getSeconds() - offsetSec)
     params.scheduleType = "relative"
-    params.hour = hour
-    params.minute = minute
+    params.hour = baseDate.getHours()
+    params.minute = baseDate.getMinutes()
   }
 
   const result = await runScript("schedule_countdown.ts", params)

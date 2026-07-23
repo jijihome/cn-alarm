@@ -1,7 +1,7 @@
 // MonthlyRepeatPage.tsx - 每月模式专属设置页
 // 支持两种子模式：按日期（每月N号，支持多选） / 按星期（每月第N周星期X）
 // 状态模式：useObservable + subscribe 监听变化触发 sync
-import { useObservable, useEffect, List, Section, Text, Picker, NavigationLink, HStack, Spacer } from "scripting"
+import { useObservable, useEffect, List, Section, Text, Picker, NavigationLink, HStack, Spacer, NavigationStack, Button, Navigation } from "scripting"
 import { RepeatRule, MonthlySubMode, HolidayAction, getDaysOfMonth } from "../../lib/constants"
 import { WEEKDAY_LABELS } from "../../lib/constants"
 import { HolidayActionPicker } from "./HolidayActionPicker"
@@ -18,6 +18,7 @@ interface MonthlyRepeatPageProps {
 }
 
 export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
+  const dismiss = Navigation.useDismiss()
   const init = rule.value
   const initialSubModeIdx = SUB_MODE_VALUES.indexOf(init.monthlySubMode ?? "day")
   const subModeIdx = useObservable(initialSubModeIdx >= 0 ? initialSubModeIdx : 0)
@@ -64,7 +65,14 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
   const subMode = SUB_MODE_VALUES[subModeIdx.value]
 
   return (
-    <List navigationTitle="每月" navigationBarTitleDisplayMode="inline">
+    <NavigationStack>
+      <List
+        navigationTitle="每月"
+        navigationBarTitleDisplayMode="inline"
+        toolbar={{
+          topBarLeading: <Button title="完成" action={() => dismiss()} />,
+        }}
+      >
       <Section header={<Text>选择方式</Text>}>
         <Picker
           title="方式"
@@ -107,6 +115,7 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
         value={holidayAction.value}
         onChanged={(v) => { holidayAction.setValue(v) }}
       />
-    </List>
+      </List>
+    </NavigationStack>
   )
 }

@@ -1,5 +1,5 @@
 // DailyRepeatPage.tsx - 每天模式专属设置页
-import { useObservable, List, Section, Text, Stepper, HStack, Spacer } from "scripting"
+import { useObservable, List, Section, Text, Stepper, HStack, Spacer, NavigationStack, Button, Navigation } from "scripting"
 import { RepeatRule, HolidayAction } from "../../lib/constants"
 import { HolidayActionPicker } from "./HolidayActionPicker"
 
@@ -8,6 +8,7 @@ interface DailyRepeatPageProps {
 }
 
 export function DailyRepeatPage({ rule }: DailyRepeatPageProps) {
+  const dismiss = Navigation.useDismiss()
   const init = rule.value
   const interval = useObservable(init.interval ?? 1)
   const holidayAction = useObservable<HolidayAction>(init.holidayAction ?? "none")
@@ -21,7 +22,14 @@ export function DailyRepeatPage({ rule }: DailyRepeatPageProps) {
   }
 
   return (
-    <List navigationTitle="每天" navigationBarTitleDisplayMode="inline">
+    <NavigationStack>
+      <List
+        navigationTitle="每天"
+        navigationBarTitleDisplayMode="inline"
+        toolbar={{
+          topBarLeading: <Button title="完成" action={() => dismiss()} />,
+        }}
+      >
       <Section header={<Text>间隔</Text>}>
         <Stepper
           onIncrement={() => { interval.setValue(Math.min(30, interval.value + 1)); sync() }}
@@ -39,6 +47,7 @@ export function DailyRepeatPage({ rule }: DailyRepeatPageProps) {
         value={holidayAction.value}
         onChanged={(v) => { holidayAction.setValue(v); sync() }}
       />
-    </List>
+      </List>
+    </NavigationStack>
   )
 }

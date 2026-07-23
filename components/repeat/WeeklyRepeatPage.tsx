@@ -1,5 +1,5 @@
 // WeeklyRepeatPage.tsx - 每周模式专属设置页
-import { useObservable, List, Section, Text, Stepper, HStack, Spacer } from "scripting"
+import { useObservable, List, Section, Text, Stepper, HStack, Spacer, NavigationStack, Button, Navigation } from "scripting"
 import { RepeatRule, HolidayAction } from "../../lib/constants"
 import { WeekdayPicker } from "../WeekdayPicker"
 import { HolidayActionPicker } from "./HolidayActionPicker"
@@ -11,6 +11,7 @@ interface WeeklyRepeatPageProps {
 }
 
 export function WeeklyRepeatPage({ rule }: WeeklyRepeatPageProps) {
+  const dismiss = Navigation.useDismiss()
   const init = rule.value
   const interval = useObservable(init.interval ?? 1)
   const weekdays = useObservable<number[]>(init.weekdays ?? [2, 3, 4, 5, 6])
@@ -32,7 +33,14 @@ export function WeeklyRepeatPage({ rule }: WeeklyRepeatPageProps) {
     .join("、")
 
   return (
-    <List navigationTitle="每周" navigationBarTitleDisplayMode="inline">
+    <NavigationStack>
+      <List
+        navigationTitle="每周"
+        navigationBarTitleDisplayMode="inline"
+        toolbar={{
+          topBarLeading: <Button title="完成" action={() => dismiss()} />,
+        }}
+      >
       <Section header={<Text>选择星期</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">已选：{weekdaySummary}</Text>}>
         <WeekdayPicker
           value={weekdays.value}
@@ -62,6 +70,7 @@ export function WeeklyRepeatPage({ rule }: WeeklyRepeatPageProps) {
         value={holidayAction.value}
         onChanged={(v) => { holidayAction.setValue(v); sync() }}
       />
-    </List>
+      </List>
+    </NavigationStack>
   )
 }

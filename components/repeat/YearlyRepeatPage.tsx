@@ -1,7 +1,7 @@
 // YearlyRepeatPage.tsx - 每年模式专属设置页
 // 支持4种子模式：按日期(同月多日) / 按星期(某月第N周星期X) / 按节气 / 第N个工作日
 // 状态模式：useObservable + subscribe 监听变化触发 sync
-import { useObservable, useEffect, List, Section, Text, Picker, NavigationLink, HStack, Spacer } from "scripting"
+import { useObservable, useEffect, List, Section, Text, Picker, NavigationLink, HStack, Spacer, NavigationStack, Button, Navigation } from "scripting"
 import { RepeatRule, YearlySubMode, HolidayAction, getDaysOfMonth } from "../../lib/constants"
 import { WEEKDAY_LABELS } from "../../lib/constants"
 import { SOLAR_TERM_NAMES } from "../../lib/solar-term"
@@ -20,6 +20,7 @@ interface YearlyRepeatPageProps {
 }
 
 export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
+  const dismiss = Navigation.useDismiss()
   const init = rule.value
   const initialSubModeIdx = SUB_MODE_VALUES.indexOf((init.yearlySubMode ?? (init.solarTerm ? "solarTerm" : "date")) as YearlySubMode)
   const subModeIdx = useObservable(initialSubModeIdx >= 0 ? initialSubModeIdx : 0)
@@ -88,7 +89,14 @@ export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
   const subMode = SUB_MODE_VALUES[subModeIdx.value]
 
   return (
-    <List navigationTitle="每年" navigationBarTitleDisplayMode="inline">
+    <NavigationStack>
+      <List
+        navigationTitle="每年"
+        navigationBarTitleDisplayMode="inline"
+        toolbar={{
+          topBarLeading: <Button title="完成" action={() => dismiss()} />,
+        }}
+      >
       <Section header={<Text>选择方式</Text>}>
         <Picker
           title="方式"
@@ -167,6 +175,7 @@ export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
         value={holidayAction.value}
         onChanged={(v) => { holidayAction.setValue(v) }}
       />
-    </List>
+      </List>
+    </NavigationStack>
   )
 }

@@ -1,5 +1,5 @@
 // OnceRepeatPage.tsx - 仅一次模式专属设置页
-import { useObservable, useEffect, List, Section, Text, DatePicker } from "scripting"
+import { useObservable, useEffect, List, Section, Text, DatePicker, NavigationStack, Button, Navigation } from "scripting"
 import { RepeatRule } from "../../lib/constants"
 
 interface OnceRepeatPageProps {
@@ -7,6 +7,7 @@ interface OnceRepeatPageProps {
 }
 
 export function OnceRepeatPage({ rule }: OnceRepeatPageProps) {
+  const dismiss = Navigation.useDismiss()
   const init = rule.value
   const anchorDate = useObservable(() => {
     const d = new Date()
@@ -32,15 +33,23 @@ export function OnceRepeatPage({ rule }: OnceRepeatPageProps) {
   }, [anchorDate.value])
 
   return (
-    <List navigationTitle="仅一次" navigationBarTitleDisplayMode="inline">
-      <Section header={<Text>选择日期</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">闹钟将在选定日期响一次后自动关闭</Text>}>
-        <DatePicker
-          title="闹钟日期"
-          displayedComponents={["date"]}
-          value={anchorDate}
-          datePickerStyle="wheel"
-        />
-      </Section>
-    </List>
+    <NavigationStack>
+      <List
+        navigationTitle="仅一次"
+        navigationBarTitleDisplayMode="inline"
+        toolbar={{
+          topBarLeading: <Button title="完成" action={() => dismiss()} />,
+        }}
+      >
+        <Section header={<Text>选择日期</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">闹钟将在选定日期响一次后自动关闭</Text>}>
+          <DatePicker
+            title="闹钟日期"
+            displayedComponents={["date"]}
+            value={anchorDate}
+            datePickerStyle="wheel"
+          />
+        </Section>
+      </List>
+    </NavigationStack>
   )
 }
