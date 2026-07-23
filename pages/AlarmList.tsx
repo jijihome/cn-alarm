@@ -20,7 +20,7 @@ function disableExpiredAlarms(): boolean {
   const allAlarms = loadAlarms()
   let changed = false
   const updated = allAlarms.map(a => {
-    if (a.enabled && (a.repeat.endDate || a.repeat.endAfterOccurrences)) {
+    if (a.enabled) {
       const next = getNextTrigger(a, now)
       if (!next) {
         changed = true
