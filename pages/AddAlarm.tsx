@@ -135,6 +135,20 @@ export function AddAlarm({ editId }: AddAlarmProps) {
           onChanged: setToastShown,
         }}
       >
+        <Section header={<Text>信息</Text>}>
+          <TextField title="标题" value={title} prompt="闹钟标题" />
+          <Picker
+            title="分组"
+            value={groupName}
+          >
+            {/* 无分类对应空串，其余对应分类名 */}
+            <Text key="none" tag="">无分类</Text>
+            {groups.map((g) => <Text key={g.id} tag={g.name}>{g.name}</Text>)}
+          </Picker>
+          <TextField title="标签" value={tag} prompt="可选标签" />
+          <TextField title="备注" value={note} prompt="可选备注" />
+        </Section>
+
         <Section
           header={<Text>提醒时间</Text>}
           footer={<Text font="footnote" foregroundStyle="systemGray">可添加多个时间点，如吃药、喝水等多次提醒。每个时间点独立响铃。</Text>}
@@ -255,20 +269,6 @@ export function AddAlarm({ editId }: AddAlarmProps) {
               />
             </>
           )}
-        </Section>
-
-        <Section header={<Text>信息</Text>}>
-          <TextField title="标题" value={title} prompt="闹钟标题" />
-          <Picker
-            title="分组"
-            value={groupName}
-          >
-            {/* 无分类对应空串，其余对应分类名 */}
-            <Text key="none" tag="">无分类</Text>
-            {groups.map((g) => <Text key={g.id} tag={g.name}>{g.name}</Text>)}
-          </Picker>
-          <TextField title="标签" value={tag} prompt="可选标签" />
-          <TextField title="备注" value={note} prompt="可选备注" />
         </Section>
 
         <Section header={<Text>外观</Text>}>

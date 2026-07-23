@@ -95,7 +95,19 @@ function migrateGroupIcons(groups: AlarmGroup[]): AlarmGroup[] {
 export function loadGroups(): AlarmGroup[] {
   const data = Storage.get<AlarmGroup[]>(STORAGE_KEYS.GROUPS, SHARED)
   const groups = data ?? DEFAULT_GROUPS
-  return migrateGroupIcons(groups)
+  const migrated = migrateGroupIcons(groups)
+  // 按标题自动排序，同步更新 order 字段
+  const sorted = migrated.sort((a, b) => a.name.localeCompare(b.name, "zh"))
+  let orderChanged = false
+  const result = sorted.map((g, i) => {
+    if (g.order !== i) {
+      orderChanged = true
+      return { ...g, order: i }
+    }
+    return g
+  })
+  if (orderChanged) saveGroups(result)
+  return result
 }
 
 export function saveGroups(groups: AlarmGroup[]): void {
