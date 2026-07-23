@@ -17,9 +17,13 @@ const WEEKDAY_HEADERS = weekStartsOnMonday
 interface DayOfMonthPickerProps {
   value: number[]
   onChanged: (days: number[]) => void
+  /** 指定月份（1-12），默认当前月 */
+  month?: number
+  /** 指定年份，默认当前年 */
+  year?: number
 }
 
-export function DayOfMonthPicker({ value, onChanged }: DayOfMonthPickerProps) {
+export function DayOfMonthPicker({ value, onChanged, month, year }: DayOfMonthPickerProps) {
   // 本地暂存选择状态，实时同步到父组件
   const localDays = useObservable(value)
 
@@ -37,18 +41,18 @@ export function DayOfMonthPicker({ value, onChanged }: DayOfMonthPickerProps) {
   }
 
   const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth() + 1
+  const displayYear = year ?? now.getFullYear()
+  const displayMonth = month ?? (now.getMonth() + 1)
   const today = now.getDate()
-  const daysInMonth = new Date(year, month, 0).getDate()
+  const daysInMonth = new Date(displayYear, displayMonth, 0).getDate()
 
-  const firstDayOfWeek = new Date(year, month - 1, 1).getDay()
+  const firstDayOfWeek = new Date(displayYear, displayMonth - 1, 1).getDay()
   const startOffset = weekStartsOnMonday ? (firstDayOfWeek + 6) % 7 : firstDayOfWeek
 
   const calendars: HolidayCalendar[] = loadHolidays()
 
   const getDayKind = (day: number): "holiday" | "workday" | "weekend" | "weekday" => {
-    const date = new Date(year, month - 1, day)
+    const date = new Date(displayYear, displayMonth - 1, day)
     const dayOfWeek = date.getDay()
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
     if (isHoliday(date, calendars)) return "holiday"
@@ -67,7 +71,7 @@ export function DayOfMonthPicker({ value, onChanged }: DayOfMonthPickerProps) {
     rows.push(cells.slice(i, i + 7))
   }
 
-  const monthLabel = `${year}年${month}月`
+  const monthLabel = `${displayYear}年${displayMonth}月`
   const cellSize = 44
   const circleSize = 36
 

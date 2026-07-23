@@ -73,7 +73,7 @@ export function YearlyRepeatSection({ rule }: YearlyRepeatSectionProps) {
             {MONTH_LABELS.map((label, idx) => <Text key={idx} tag={idx + 1}>{label}</Text>)}
           </Picker>
           <NavigationLink
-            destination={<DayOfMonthPicker value={getDaysOfMonth(r)} onChanged={(v: number[]) => updateRule({ daysOfMonth: v })} />}
+            destination={<DayOfMonthPicker month={r.monthOfYear ?? 1} value={getDaysOfMonth(r)} onChanged={(v: number[]) => updateRule({ daysOfMonth: v })} />}
           >
             <HStack alignment="center">
               <Text>选择日期</Text>
