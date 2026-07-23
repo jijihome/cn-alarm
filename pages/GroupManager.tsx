@@ -1,5 +1,5 @@
 // GroupManager.tsx - 分类管理页（增删改，快捷指令风格图标/颜色选择）
-import { useState, useObservable, NavigationStack, List, Section, Text, Button, HStack, Spacer, TextField, Navigation, ForEach, ContentUnavailableView, Image, Circle, VStack, ZStack, RoundedRectangle, ScrollView, useEffect } from "scripting"
+import { useState, useObservable, NavigationStack, List, Section, Text, Button, HStack, Spacer, TextField, Navigation, ForEach, ContentUnavailableView, Image, Circle, VStack, ZStack, RoundedRectangle, ScrollView, useEffect, Picker } from "scripting"
 import { AlarmGroup } from "../lib/constants"
 import { loadGroups, saveGroups, addGroup, updateGroup, removeGroup, createGroup } from "../lib/alarm-store"
 import { COLOR_OPTIONS, ICON_CATEGORIES, ALL_ICONS } from "../lib/icon-data"
@@ -14,20 +14,6 @@ function rowsOf<T>(items: T[], cols: number): T[][] {
     rows.push(items.slice(i, i + cols))
   }
   return rows
-}
-
-/** 颜色网格单元格 */
-function ColorCell({ color, selected, onTap }: { color: string; selected: boolean; onTap: () => void }) {
-  return (
-    <Button action={onTap}>
-      <ZStack frame={{ width: 50, height: 50 }}>
-        <Circle fill={color as any} frame={{ width: 34, height: 34 }} />
-        {selected && (
-          <Circle stroke={{ shapeStyle: color as any, strokeStyle: { lineWidth: 3 } }} frame={{ width: 42, height: 42 }} />
-        )}
-      </ZStack>
-    </Button>
-  )
 }
 
 /** 图标网格单元格 */
@@ -132,26 +118,19 @@ function GroupEditor({ editId }: { editId?: string }) {
             />
           </VStack>
 
-          {/* 颜色网格 */}
-          <VStack spacing={12} padding={16} background={cardBg}>
+          {/* 颜色选择：Picker menu 弹出式菜单 */}
+          <VStack spacing={4} padding={16} background={cardBg}>
             <Text font={13} foregroundStyle="secondaryLabel">颜色</Text>
-            <VStack spacing={12}>
-              {rowsOf(COLOR_OPTIONS, COLS).map((row, ri) => (
-                <HStack key={ri} spacing={12} alignment="center">
-                  {row.map((c) => (
-                    <ColorCell
-                      key={c.value}
-                      color={c.value}
-                      selected={colorValue.value === c.value}
-                      onTap={() => colorValue.setValue(c.value)}
-                    />
-                  ))}
-                  {row.length < COLS && Array.from({ length: COLS - row.length }, (_, si) => (
-                    <ColorCell key={`e${si}`} color="clear" selected={false} onTap={() => {}} />
-                  ))}
-                </HStack>
+            <Picker
+              title={COLOR_OPTIONS.find(c => c.value === colorValue.value)?.label ?? "颜色"}
+              value={colorValue.value}
+              onChanged={(v: string) => colorValue.setValue(v)}
+              pickerStyle="menu"
+            >
+              {COLOR_OPTIONS.map((c) => (
+                <Text key={c.value} tag={c.value}>{c.label}</Text>
               ))}
-            </VStack>
+            </Picker>
           </VStack>
 
           {/* 搜索栏 */}

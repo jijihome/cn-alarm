@@ -34,6 +34,7 @@ export interface ScheduleResult {
   mainAlarmId: string
   allAlarmIds: string[]   // 主+额外时间点的系统闹钟 ID
   retryIds: string[]      // 重试闹钟 ID（alarm 类型）或通知 ID（notification 类型）
+  gradualWakeIds: string[] // 渐进唤醒通知 ID
 }
 
 export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Promise<ScheduleResult | null> {
@@ -56,6 +57,15 @@ export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Prom
   let mainAlarmId: string | null = null
   const allAlarmIds: string[] = []
   const retryIds: string[] = []
+  const gradualWakeIds: string[] = []
+
+  // 渐进唤醒：在正式闹钟前 preAlertSeconds 秒调度本地通知（轻提醒）
+  // ⚠️ AlarmManager.Countdown 的 preAlert 只是静默倒计时 UI，不产生声音
+  // 所以用本地通知做真正的"轻提醒"，而不是用 preAlert 参数
+  if (alarm.gradualWake && alarm.preAlertSeconds > 0) {
+    const gids = await scheduleGradualWakeNotifications(alarm, specificDate)
+    gradualWakeIds.push(...gids)
+  }
 
   // 主时间点
   if (mainType === "notification") {
@@ -100,7 +110,7 @@ export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Prom
   }
 
   if (!mainAlarmId && allAlarmIds.length === 0) return null
-  return { mainAlarmId: mainAlarmId ?? allAlarmIds[0], allAlarmIds, retryIds }
+  return { mainAlarmId: mainAlarmId ?? allAlarmIds[0], allAlarmIds, retryIds, gradualWakeIds }
 }
 
 // ==================== 调度单个系统闹钟 ====================
@@ -116,39 +126,20 @@ async function scheduleSingleAlarm(
     metadata: { alarmItemId: alarm.id, hour: String(hour), minute: String(minute) },
   }
 
-  // 渐进唤醒：preAlert 为正式响铃前的倒计时秒数，postAlert 为正式响铃持续时长
-  // 非渐进唤醒：也需要至少一个 alert 参数（schedule_countdown 硬性要求）
-  // 用 postAlert=60 表示正式响铃后 60 秒自动停止
-  //
-  // ⚠️ AlarmManager.Countdown 的 preAlert 语义是「从 schedule 触发时刻开始，
-  // 先进入 preAlert 秒的倒计时阶段，然后才进入正式响铃（postAlert 秒）」。
-  // 即 schedule 触发 ≠ 正式响铃，正式响铃 = schedule 触发 + preAlert 秒。
-  // 用户期望「到设定时间正式响铃」，所以 schedule 时间需提前 preAlert 秒。
-  // 修正后：scheduleTime = userTime - preAlert → preAlert 秒倒计时 → 正式响铃
-  const useGradual = alarm.gradualWake && alarm.preAlertSeconds > 0
-  if (useGradual) {
-    params.preAlert = alarm.preAlertSeconds
-    params.postAlert = 60
-  } else {
-    params.postAlert = 60
-  }
+  // postAlert=60 表示正式响铃后 60 秒自动停止
+  // schedule_countdown 要求至少一个 alert 参数
+  // ⚠️ 不再传 preAlert——它只是静默倒计时 UI，不产生声音
+  // 渐进唤醒改用本地通知（见 scheduleGradualWakeNotifications）
+  params.postAlert = 60
 
   if (alarm.repeat.mode === "weekly" && alarm.repeat.weekdays) {
     // 每周重复：用 weekly schedule
-    // weekly 用 hour/minute 指定触发时间，无法用秒级偏移
-    // 渐进唤醒时，把 hour/minute 提前 preAlert 秒（可能跨天/跨小时）
     params.scheduleType = "weekly"
-    const offsetSec = useGradual ? alarm.preAlertSeconds : 0
-    const baseDate = new Date()
-    baseDate.setHours(hour, minute, 0, 0)
-    baseDate.setSeconds(baseDate.getSeconds() - offsetSec)
-    params.hour = baseDate.getHours()
-    params.minute = baseDate.getMinutes()
+    params.hour = hour
+    params.minute = minute
     params.weekdays = alarm.repeat.weekdays
   } else if (specificDate) {
     // 一次性：用 fixed schedule
-    // 渐进唤醒时，schedule 时间提前 preAlert 秒
-    const offsetSec = useGradual ? alarm.preAlertSeconds : 0
     const isoDate = new Date(
       specificDate.getFullYear(),
       specificDate.getMonth(),
@@ -156,20 +147,14 @@ async function scheduleSingleAlarm(
       hour,
       minute,
       0
-    )
-    isoDate.setSeconds(isoDate.getSeconds() - offsetSec)
+    ).toISOString()
     params.scheduleType = "fixed"
-    params.date = isoDate.toISOString()
+    params.date = isoDate
   } else {
     // 默认：relative schedule（每天）
-    // 渐进唤醒时，把 hour/minute 提前 preAlert 秒（可能跨天/跨小时）
-    const offsetSec = useGradual ? alarm.preAlertSeconds : 0
-    const baseDate = new Date()
-    baseDate.setHours(hour, minute, 0, 0)
-    baseDate.setSeconds(baseDate.getSeconds() - offsetSec)
     params.scheduleType = "relative"
-    params.hour = baseDate.getHours()
-    params.minute = baseDate.getMinutes()
+    params.hour = hour
+    params.minute = minute
   }
 
   const result = await runScript("schedule_countdown.ts", params)
@@ -180,6 +165,57 @@ async function scheduleSingleAlarm(
   }
   console.log("scheduleSingleAlarm failed:", JSON.stringify(result))
   return null
+}
+
+// ==================== 调度渐进唤醒通知 ====================
+// 在正式闹钟前 preAlertSeconds 秒调度本地通知（轻提醒）
+// 为每个时间点（主+额外）各调度一条通知
+async function scheduleGradualWakeNotifications(
+  alarm: AlarmItem,
+  specificDate?: Date
+): Promise<string[]> {
+  const ids: string[] = []
+  const preAlertSec = alarm.preAlertSeconds
+
+  // 收集所有时间点
+  const allTimes = [
+    { hour: alarm.hour, minute: alarm.minute, label: "main" },
+    ...(alarm.reminderTimes ?? []).map((t, i) => ({ hour: t.hour, minute: t.minute, label: `extra${i}` }))
+  ]
+
+  for (const t of allTimes) {
+    const notifId = `${alarm.id}_gradual_${t.label}`
+    const triggerTime = buildTriggerDate(t.hour, t.minute, specificDate)
+    triggerTime.setSeconds(triggerTime.getSeconds() - preAlertSec)
+
+    // 如果触发时间已过去，跳过
+    if (triggerTime.getTime() <= Date.now()) continue
+
+    const nid = await scheduleNotification(
+      notifId,
+      alarm.title + " ⏰",
+      `${Math.floor(preAlertSec / 60)} 分钟后响铃，请准备`,
+      triggerTime
+    )
+    if (nid) ids.push(nid)
+  }
+
+  return ids
+}
+
+// ==================== 取消渐进唤醒通知 ====================
+export async function cancelGradualWakeNotifications(alarm: AlarmItem): Promise<void> {
+  const ids: string[] = []
+  // 按规则构造 ID
+  ids.push(`${alarm.id}_gradual_main`)
+  if (alarm.reminderTimes) {
+    alarm.reminderTimes.forEach((_, i) => ids.push(`${alarm.id}_gradual_extra${i}`))
+  }
+  // 也取消 Storage 中记录的 ID
+  if (alarm.gradualWakeIds) {
+    ids.push(...alarm.gradualWakeIds)
+  }
+  await Promise.all(ids.map(id => cancelNotification(id).catch(() => {})))
 }
 
 // ==================== 调度重试提醒 ====================

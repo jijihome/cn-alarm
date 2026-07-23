@@ -130,6 +130,8 @@ export interface AlarmItem {
   retryAlarmIds?: string[]
   /** 已确认的重试记录：key = "YYYY-MM-DD_HH:MM"，value = 确认时间戳 */
   confirmedReminders?: Record<string, number>
+  /** 渐进唤醒通知 ID（本地通知，便于取消） */
+  gradualWakeIds?: string[]
 }
 
 export interface AlarmGroup {

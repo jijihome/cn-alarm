@@ -1,10 +1,8 @@
 // RepeatSettings.tsx - 重复模式设置
 // 交互设计：
-//   1. "模式" 行 → Button + Navigation.present 模态弹出模式选择页
+//   1. "模式" 行 → Menu 下拉菜单选模式（轻量，无页面跳转）
 //   2. "设置" 行 → Button + Navigation.present 模态弹出当前模式的专属设置页
-//      （NavigationLink push 的页面修改 Observable 后 dismiss 回来父页面不重渲染，
-//       改用 present + dismiss + .then() 回调触发 rule.setValue 强制重渲染）
-import { Text, List, Section, NavigationStack, Button, Navigation, HStack, Spacer, Image } from "scripting"
+import { Text, Section, Button, Navigation, HStack, Spacer, Image, Picker } from "scripting"
 import { RepeatMode, RepeatRule } from "../../lib/constants"
 import { formatRepeatDescription } from "../../lib/scheduler"
 import { buildRepeatRule } from "../../lib/repeat-rule-builder"
@@ -35,7 +33,6 @@ interface RepeatSettingsProps {
 
 export function RepeatSettings({ rule }: RepeatSettingsProps) {
   // 直接在 JSX 中读 rule.value，确保 Scripting 响应式追踪捕获依赖
-  // 不用 const 中间变量（函数体顶层读取 .value 可能不被依赖追踪系统捕获）
 
   const presentSettingsPage = () => {
     const currentMode = rule.value.mode
@@ -58,28 +55,24 @@ export function RepeatSettings({ rule }: RepeatSettingsProps) {
     })
   }
 
-  const presentModePicker = () => {
-    Navigation.present({
-      element: <RepeatModePickerPage currentMode={rule.value.mode} />,
-    }).then((result) => {
-      if (result?.selectedMode && result.selectedMode !== rule.value.mode) {
-        const newRule = buildRepeatRule(result.selectedMode, rule.value)
-        rule.setValue(newRule)
-      }
-    })
-  }
-
   return (
     <>
       <Section header={<Text>重复</Text>}>
-        <Button action={presentModePicker}>
-          <HStack alignment="center">
-            <Text>模式</Text>
-            <Spacer />
-            <Text foregroundStyle="secondaryLabel">{REPEAT_MODES.find((m) => m.value === rule.value.mode)?.label ?? ""}</Text>
-            <Image systemName="chevron.right" imageScale="small" foregroundStyle="tertiaryLabel" />
-          </HStack>
-        </Button>
+        {/* 模式选择：Picker menu 风格弹出式菜单 */}
+        <Picker
+          title="模式"
+          value={rule.value.mode as string}
+          onChanged={(mode: string) => {
+            if (mode !== rule.value.mode) {
+              rule.setValue(buildRepeatRule(mode as RepeatMode, rule.value))
+            }
+          }}
+          pickerStyle="automatic"
+        >
+          {REPEAT_MODES.map((m) => (
+            <Text key={m.value} tag={m.value}>{m.label}</Text>
+          ))}
+        </Picker>
         <Button action={presentSettingsPage}>
           <HStack alignment="center">
             <Text>设置</Text>
@@ -92,37 +85,5 @@ export function RepeatSettings({ rule }: RepeatSettingsProps) {
       {/* once 模式不需要结束条件（本身一次性） */}
       {rule.value.mode !== "once" && <EndConditionPicker rule={rule} />}
     </>
-  )
-}
-
-// ==================== 模式选择页（模态弹出，dismiss 返回选择结果） ====================
-function RepeatModePickerPage({ currentMode }: { currentMode: RepeatMode }) {
-  const dismiss = Navigation.useDismiss()
-  const selectMode = (mode: RepeatMode) => {
-    dismiss({ selectedMode: mode })
-  }
-
-  return (
-    <NavigationStack>
-      <List navigationTitle="选择重复模式" navigationBarTitleDisplayMode="inline">
-        <Section>
-          {REPEAT_MODES.map((m) => {
-            const selected = m.value === currentMode
-            return (
-              <Button
-                key={m.value}
-                action={() => selectMode(m.value)}
-              >
-                <HStack alignment="center">
-                  <Text foregroundStyle={selected ? "systemBlue" : "label"}>{m.label}</Text>
-                  <Spacer />
-                  {selected ? <Text foregroundStyle="systemBlue">✓</Text> : null}
-                </HStack>
-              </Button>
-            )
-          })}
-        </Section>
-      </List>
-    </NavigationStack>
   )
 }
