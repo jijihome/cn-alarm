@@ -1,6 +1,6 @@
 // sort.ts - 列表排序纯函数
 import { AlarmItem, CreditCard, AlarmSortKey, CardSortKey } from "./constants"
-import { getNextDueDate } from "./credit-card"
+import { getNextDueDate, getNextCardTrigger } from "./credit-card"
 import { getNextTrigger } from "./scheduler"
 
 // ==================== 方向标记 ====================
@@ -80,6 +80,7 @@ export function sortAlarms(alarms: AlarmItem[], sortBy: AlarmSortKey, ascending:
 /** 信用卡排序选项 */
 export const CARD_SORT_OPTIONS: { key: CardSortKey; label: string; reversible: boolean; defaultAsc: boolean }[] = [
   { key: "bank", label: "银行名", reversible: true, defaultAsc: true },
+  { key: "nextTrigger", label: "下次响铃", reversible: true, defaultAsc: true },
   { key: "dueDate", label: "还款日", reversible: true, defaultAsc: true },
   { key: "statementDay", label: "账单日", reversible: true, defaultAsc: true },
   { key: "enabled", label: "启用优先", reversible: false, defaultAsc: false },
@@ -99,6 +100,19 @@ export function sortCards(cards: CreditCard[], sortBy: CardSortKey, ascending: b
   switch (sortBy) {
     case "bank":
       return arr.sort((a, b) => dir * a.bankName.localeCompare(b.bankName, "zh"))
+    case "nextTrigger": {
+      // 按下次响铃时间排序，null（未启用/无提醒）排最后
+      return arr.sort((a, b) => {
+        const ta = getNextCardTrigger(a)
+        const tb = getNextCardTrigger(b)
+        const va = ta ? ta.getTime() : Infinity
+        const vb = tb ? tb.getTime() : Infinity
+        if (va === Infinity && vb === Infinity) return a.bankName.localeCompare(b.bankName, "zh")
+        if (va === Infinity) return 1
+        if (vb === Infinity) return -1
+        return dir * (va - vb)
+      })
+    }
     case "dueDate":
       // 还款日：最近的在前（升序），远的在前（降序）
       return arr.sort((a, b) => {

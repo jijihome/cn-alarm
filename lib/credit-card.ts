@@ -317,6 +317,45 @@ export async function deleteCard(id: string): Promise<void> {
   }
 }
 
+// ==================== 下次响铃时间 ====================
+
+/** 计算信用卡下次响铃时间：遍历所有启用的提醒类型，找最近一次触发时间。卡未启用返回 null */
+export function getNextCardTrigger(card: CreditCard): Date | null {
+  if (!card.enabled) return null
+  const now = new Date()
+  const rt = card.reminderTypes
+  if (!rt) return null
+
+  let earliest: Date | null = null
+
+  // 对某种提醒类型，计算本月+下月的触发时间，取最近一个
+  const checkType = (enabled: boolean, getDate: (y: number, m: number) => Date, config: ReminderTypeConfig) => {
+    if (!enabled) return
+    let year = now.getFullYear()
+    let month = now.getMonth() + 1
+    for (let i = 0; i < 2; i++) {
+      const date = getDate(year, month)
+      // 组合日期+时间
+      const trigger = new Date(date)
+      trigger.setHours(config.hour, config.minute, 0, 0)
+      if (trigger > now) {
+        if (!earliest || trigger < earliest) {
+          earliest = trigger
+        }
+      }
+      month++
+      if (month > 12) { month = 1; year++ }
+    }
+  }
+
+  checkType(rt.statement.enabled, (y, m) => getStatementDate(card, y, m), rt.statement)
+  checkType(rt.advance.enabled, (y, m) => calculateRemindDate(card, y, m), rt.advance)
+  checkType(rt.due.enabled, (y, m) => calculateDueDate(card, y, m), rt.due)
+  checkType(rt.buffer.enabled, (y, m) => calculateBufferEndDate(card, y, m), rt.buffer)
+
+  return earliest
+}
+
 // ==================== 格式化日期 ====================
 export function formatDateCN(date: Date): string {
   return `${date.getMonth() + 1}月${date.getDate()}日`

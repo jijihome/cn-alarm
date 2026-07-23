@@ -31,7 +31,7 @@ export type RetryType = "alarm" | "notification"
 export type AlarmSortKey = "time" | "nextTrigger" | "name" | "enabled" | "created" | "group"
 
 /** 信用卡列表排序维度 */
-export type CardSortKey = "bank" | "dueDate" | "statementDay" | "enabled"
+export type CardSortKey = "bank" | "dueDate" | "nextTrigger" | "statementDay" | "enabled"
 
 /** 未确认重试配置 */
 export interface RetryConfig {
