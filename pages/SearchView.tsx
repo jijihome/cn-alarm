@@ -70,7 +70,7 @@ export function SearchView() {
   const handleEdit = (id: string) => {
     Navigation.present({
       element: <AddAlarm editId={id} />,
-      modalPresentationStyle: "fullScreen",
+      modalPresentationStyle: "pageSheet",
     }).then(() => {
       results.setValue(refreshResults(query))
     })
@@ -102,7 +102,7 @@ export function SearchView() {
   const handleEditCard = (id: string) => {
     Navigation.present({
       element: <AddCreditCard editId={id} />,
-      modalPresentationStyle: "fullScreen",
+      modalPresentationStyle: "pageSheet",
     }).then(() => {
       results.setValue(refreshResults(query))
     })

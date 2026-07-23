@@ -1,14 +1,14 @@
 // YearlyRepeatPage.tsx - 每年模式专属设置页
-// 支持4种子模式：按日期 / 按星期(某月第N周星期X) / 按节气 / 第N个工作日
+// 支持4种子模式：按日期(同月多日) / 按星期(某月第N周星期X) / 按节气 / 第N个工作日
 // 状态模式：useObservable + subscribe 监听变化触发 sync
-import { useObservable, useEffect, List, Section, Text, Picker } from "scripting"
-import { RepeatRule, YearlySubMode, HolidayAction } from "../../lib/constants"
+import { useObservable, useEffect, List, Section, Text, Picker, NavigationLink, HStack, Spacer } from "scripting"
+import { RepeatRule, YearlySubMode, HolidayAction, getDaysOfMonth } from "../../lib/constants"
 import { WEEKDAY_LABELS } from "../../lib/constants"
 import { SOLAR_TERM_NAMES } from "../../lib/solar-term"
 import { HolidayActionPicker } from "./HolidayActionPicker"
+import { DayOfMonthPicker, formatDaysOfMonth } from "../DayOfMonthPicker"
 
 const MONTH_LABELS = Array.from({ length: 12 }, (_, i) => `${i + 1}月`)
-const DAY_LABELS = Array.from({ length: 31 }, (_, i) => `${i + 1}号`)
 const WEEK_OF_MONTH_LABELS = ["第一周", "第二周", "第三周", "第四周", "最后一周"]
 const WEEK_OF_MONTH_VALUES = [1, 2, 3, 4, -1]
 const WEEKDAY_PICKER_LABELS = WEEKDAY_LABELS.map((l) => `星期${l}`)
@@ -24,9 +24,8 @@ export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
   const initialSubModeIdx = SUB_MODE_VALUES.indexOf((init.yearlySubMode ?? (init.solarTerm ? "solarTerm" : "date")) as YearlySubMode)
   const subModeIdx = useObservable(initialSubModeIdx >= 0 ? initialSubModeIdx : 0)
   const monthOfYear = useObservable(init.monthOfYear ?? 1)
-  const dayOfMonth = useObservable(init.dayOfMonth ?? 1)
-  const initialWeekIdx = WEEK_OF_MONTH_VALUES.indexOf(init.weekOfMonth ?? 1)
-  const weekOfMonthIdx = useObservable(initialWeekIdx >= 0 ? initialWeekIdx : 0)
+  const daysOfMonth = useObservable<number[]>(getDaysOfMonth(init))
+  const weekOfMonth = useObservable(init.weekOfMonth ?? 1)
   const weekdayOfMonth = useObservable(init.weekdayOfMonth ?? 2)
   const initialSolarIdx = (() => {
     if (init.solarTerm) {
@@ -49,10 +48,10 @@ export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
     }
     if (subMode === "date") {
       newRule.monthOfYear = monthOfYear.value
-      newRule.dayOfMonth = dayOfMonth.value
+      newRule.daysOfMonth = daysOfMonth.value
     } else if (subMode === "weekday") {
       newRule.monthOfYear = monthOfYear.value
-      newRule.weekOfMonth = WEEK_OF_MONTH_VALUES[weekOfMonthIdx.value]
+      newRule.weekOfMonth = weekOfMonth.value
       newRule.weekdayOfMonth = weekdayOfMonth.value
     } else if (subMode === "solarTerm") {
       if (solarTermIdx.value >= 0 && solarTermIdx.value < SOLAR_TERM_NAMES.length) {
@@ -68,8 +67,8 @@ export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
     const onLocalChange = () => { sync() }
     subModeIdx.subscribe(onLocalChange)
     monthOfYear.subscribe(onLocalChange)
-    dayOfMonth.subscribe(onLocalChange)
-    weekOfMonthIdx.subscribe(onLocalChange)
+    daysOfMonth.subscribe(onLocalChange)
+    weekOfMonth.subscribe(onLocalChange)
     weekdayOfMonth.subscribe(onLocalChange)
     solarTermIdx.subscribe(onLocalChange)
     nthWorkday.subscribe(onLocalChange)
@@ -77,8 +76,8 @@ export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
     return () => {
       subModeIdx.unsubscribe(onLocalChange)
       monthOfYear.unsubscribe(onLocalChange)
-      dayOfMonth.unsubscribe(onLocalChange)
-      weekOfMonthIdx.unsubscribe(onLocalChange)
+      daysOfMonth.unsubscribe(onLocalChange)
+      weekOfMonth.unsubscribe(onLocalChange)
       weekdayOfMonth.unsubscribe(onLocalChange)
       solarTermIdx.unsubscribe(onLocalChange)
       nthWorkday.unsubscribe(onLocalChange)
@@ -107,12 +106,15 @@ export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
           >
             {MONTH_LABELS.map((label, idx) => <Text key={idx} tag={idx + 1}>{label}</Text>)}
           </Picker>
-          <Picker
-            title="日期"
-            value={dayOfMonth as any}
+          <NavigationLink
+            destination={<DayOfMonthPicker value={daysOfMonth.value} onChanged={(v) => { daysOfMonth.setValue(v); sync() }} />}
           >
-            {DAY_LABELS.map((label, idx) => <Text key={idx} tag={idx + 1}>{label}</Text>)}
-          </Picker>
+            <HStack alignment="center">
+              <Text>选择日期</Text>
+              <Spacer />
+              <Text foregroundStyle="secondaryLabel">{formatDaysOfMonth(daysOfMonth.value)}</Text>
+            </HStack>
+          </NavigationLink>
         </Section>
       )}
 
@@ -126,7 +128,7 @@ export function YearlyRepeatPage({ rule }: YearlyRepeatPageProps) {
           </Picker>
           <Picker
             title="第几周"
-            value={weekOfMonthIdx as any}
+            value={weekOfMonth as any}
           >
             {WEEK_OF_MONTH_LABELS.map((label, idx) => <Text key={idx} tag={WEEK_OF_MONTH_VALUES[idx]}>{label}</Text>)}
           </Picker>

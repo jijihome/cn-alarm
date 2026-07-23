@@ -168,7 +168,7 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
   const presentEditor = (editId?: string) => {
     Navigation.present({
       element: <AddCreditCard editId={editId} />,
-      modalPresentationStyle: "fullScreen",
+      modalPresentationStyle: "pageSheet",
     }).then((result: any) => {
       if (result?.deleted && result?.cardId) {
         // 异步取消系统闹钟（fire-and-forget）

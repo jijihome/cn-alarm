@@ -5,7 +5,7 @@
 // 响应式：所有显示直接读 rule.value（props Observable），rule.setValue 触发
 //        AddAlarm 重渲染 → RepeatSettings 作为子组件重渲染 → 显示自动更新
 import { Text, List, Section, NavigationLink, NavigationStack, Button, Navigation, HStack, Spacer } from "scripting"
-import { RepeatMode, RepeatRule } from "../../lib/constants"
+import { RepeatMode, RepeatRule, getDaysOfMonth } from "../../lib/constants"
 import { formatRepeatDescription } from "../../lib/scheduler"
 
 import { WeeklyRepeatPage } from "./WeeklyRepeatPage"
@@ -101,14 +101,14 @@ function RepeatModePickerPage({ rule }: { rule: Observable<RepeatRule> }) {
     }
     if (mode === "monthly") {
       newRule.monthlySubMode = rule.value.monthlySubMode ?? "day"
-      newRule.dayOfMonth = rule.value.dayOfMonth ?? 1
+      newRule.daysOfMonth = getDaysOfMonth(rule.value)
       if (rule.value.weekOfMonth) newRule.weekOfMonth = rule.value.weekOfMonth
       if (rule.value.weekdayOfMonth) newRule.weekdayOfMonth = rule.value.weekdayOfMonth
     }
     if (mode === "yearly") {
       newRule.yearlySubMode = rule.value.yearlySubMode ?? "date"
       newRule.monthOfYear = rule.value.monthOfYear ?? 1
-      newRule.dayOfMonth = rule.value.dayOfMonth ?? 1
+      newRule.daysOfMonth = getDaysOfMonth(rule.value)
       if (rule.value.solarTerm) newRule.solarTerm = rule.value.solarTerm
       if (rule.value.weekOfMonth) newRule.weekOfMonth = rule.value.weekOfMonth
       if (rule.value.weekdayOfMonth) newRule.weekdayOfMonth = rule.value.weekdayOfMonth

@@ -55,6 +55,8 @@ export interface RepeatRule {
   interval: number
   weekdays?: number[]
   dayOfMonth?: number
+  /** 每月/每年多日期选择（优先于 dayOfMonth）。如 [1, 15] 表示每月1号和15号 */
+  daysOfMonth?: number[]
   monthOfYear?: number
   /** 每月/每年子模式 */
   monthlySubMode?: MonthlySubMode
@@ -77,14 +79,25 @@ export interface RepeatRule {
   endAfterOccurrences?: number
 }
 
-/** 把旧 RepeatRule（holidayAware: boolean）迁移到新 holidayAction 枚举 */
+/** 从 RepeatRule 读取多日期。优先读 daysOfMonth，否则从旧 dayOfMonth 转换 */
+export function getDaysOfMonth(rule: RepeatRule): number[] {
+  if (rule.daysOfMonth && rule.daysOfMonth.length > 0) return rule.daysOfMonth
+  if (rule.dayOfMonth != null) return [rule.dayOfMonth]
+  return [1]
+}
+
+/** 把旧 RepeatRule（holidayAware: boolean / dayOfMonth:number）迁移到新字段 */
 export function normalizeRule(rule: RepeatRule): RepeatRule {
-  // 兼容旧字段：如果 holidayAction 缺失但有 holidayAware，做迁移
   const r = rule as any
+  // 兼容旧字段：如果 holidayAction 缺失但有 holidayAware，做迁移
   if (r.holidayAction === undefined) {
     r.holidayAction = r.holidayAware === true ? "skip" : "none"
   }
   delete r.holidayAware
+  // 兼容旧字段：如果有 dayOfMonth 但没有 daysOfMonth，自动迁移
+  if (r.dayOfMonth != null && (!r.daysOfMonth || r.daysOfMonth.length === 0)) {
+    r.daysOfMonth = [r.dayOfMonth]
+  }
   return r as RepeatRule
 }
 

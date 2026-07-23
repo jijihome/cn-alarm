@@ -255,7 +255,7 @@ export function GroupManager() {
   const presentEditor = (editId?: string) => {
     Navigation.present({
       element: <GroupEditor editId={editId} />,
-      modalPresentationStyle: "fullScreen",
+      modalPresentationStyle: "pageSheet",
     }).then((result: any) => {
       if (result?.saved) {
         setToastMsg(editId ? "分类已更新" : "分类已添加")

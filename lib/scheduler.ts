@@ -1,5 +1,5 @@
 // scheduler.ts - 多调度引擎核心
-import { AlarmItem, RepeatRule } from "./constants"
+import { AlarmItem, RepeatRule, getDaysOfMonth } from "./constants"
 import { HolidayAction } from "./constants"
 import { isHoliday, isWorkday, formatDate } from "./holiday"
 import { lunarToSolar } from "./lunar"
@@ -253,49 +253,83 @@ function getNextMonthly(alarm: AlarmItem, now: Date): Date | null {
   let month = now.getMonth() + 1
 
   for (let i = 0; i < 24; i++) {
-    let candidate: Date | null = null
-
-    if (subMode === "weekday" && alarm.repeat.weekOfMonth && alarm.repeat.weekdayOfMonth) {
-      // 每月第N周的星期X
-      candidate = getWeekdayOfMonth(year, month, alarm.repeat.weekOfMonth, alarm.repeat.weekdayOfMonth)
-    } else {
-      // 每月第N号（默认）
-      const dayOfMonth = alarm.repeat.dayOfMonth ?? 1
-      const daysInMonth = new Date(year, month, 0).getDate()
-      const actualDay = Math.min(dayOfMonth, daysInMonth)
-      candidate = new Date(year, month - 1, actualDay)
+    // 检查间隔
+    if (interval > 1 && alarm.repeat.anchorDate) {
+      const anchor = new Date(alarm.repeat.anchorDate)
+      const monthDiff = (year - anchor.getFullYear()) * 12 + (month - (anchor.getMonth() + 1))
+      if (monthDiff % interval !== 0) {
+        month++
+        if (month > 12) { month = 1; year++ }
+        continue
+      }
     }
 
-    if (candidate && candidate > now) {
-      // 检查间隔
-      if (interval > 1 && alarm.repeat.anchorDate) {
-        const anchor = new Date(alarm.repeat.anchorDate)
-        const monthDiff = (year - anchor.getFullYear()) * 12 + (month - (anchor.getMonth() + 1))
-        if (monthDiff % interval !== 0) {
-          month++
-          if (month > 12) { month = 1; year++ }
-          continue
+    if (subMode === "weekday" && alarm.repeat.weekOfMonth && alarm.repeat.weekdayOfMonth) {
+      // 每月第N周的星期X（单日期）
+      const candidate = getWeekdayOfMonth(year, month, alarm.repeat.weekOfMonth, alarm.repeat.weekdayOfMonth)
+      if (candidate && candidate > now) {
+        candidate.setHours(alarm.hour, alarm.minute, 0, 0)
+        // 调休动作
+        if (action === "skip") {
+          if (isHoliday(candidate)) {
+            month++
+            if (month > 12) { month = 1; year++ }
+            continue
+          }
+          if (isWorkday(candidate)) return candidate
+        } else if (action === "defer") {
+          if (isHoliday(candidate)) {
+            const deferred = deferPastHoliday(candidate)
+            deferred.setHours(alarm.hour, alarm.minute, 0, 0)
+            return deferred
+          }
         }
+        return candidate
       }
-      candidate.setHours(alarm.hour, alarm.minute, 0, 0)
+    } else {
+      // 按日期：遍历 daysOfMonth 找当月最近的候选
+      const daysOfMonth = getDaysOfMonth(alarm.repeat)
+      const daysInMonth = new Date(year, month, 0).getDate()
 
-      // 调休动作
-      if (action === "skip") {
-        if (isHoliday(candidate)) {
-          month++
-          if (month > 12) { month = 1; year++ }
-          continue
-        }
-        if (isWorkday(candidate)) return candidate
-      } else if (action === "defer") {
-        if (isHoliday(candidate)) {
-          const deferred = deferPastHoliday(candidate)
-          deferred.setHours(alarm.hour, alarm.minute, 0, 0)
-          return deferred
-        }
+      // 对当月所有选中日期，按时间排序找 > now 的最早候选
+      const candidates: Date[] = []
+      for (const day of daysOfMonth) {
+        const actualDay = Math.min(day, daysInMonth)
+        const candidate = new Date(year, month - 1, actualDay, alarm.hour, alarm.minute, 0, 0)
+        if (candidate > now) candidates.push(candidate)
       }
+      candidates.sort((a, b) => a.getTime() - b.getTime())
 
-      return candidate
+      if (candidates.length > 0) {
+        const candidate = candidates[0]
+        // 调休动作
+        if (action === "skip") {
+          if (isHoliday(candidate)) {
+            // 跳过这个日期，尝试同月下一个候选
+            const remaining = candidates.slice(1)
+            if (remaining.length > 0) {
+              // 同月还有其他候选日，检查下一个
+              for (const c of remaining) {
+                if (isHoliday(c)) continue
+                if (isWorkday(c)) return c
+                return c
+              }
+            }
+            // 同月没有可用候选，进下月
+            month++
+            if (month > 12) { month = 1; year++ }
+            continue
+          }
+          if (isWorkday(candidate)) return candidate
+        } else if (action === "defer") {
+          if (isHoliday(candidate)) {
+            const deferred = deferPastHoliday(candidate)
+            deferred.setHours(alarm.hour, alarm.minute, 0, 0)
+            return deferred
+          }
+        }
+        return candidate
+      }
     }
 
     month++
@@ -373,16 +407,24 @@ function getNextYearly(alarm: AlarmItem, now: Date): Date | null {
     return null
   }
 
-  // 普通每年重复（月+日）
+  // 普通每年重复（月+多日期）
   const monthOfYear = alarm.repeat.monthOfYear ?? 1
-  const dayOfMonth = alarm.repeat.dayOfMonth ?? 1
+  const daysOfMonth = getDaysOfMonth(alarm.repeat)
   let year = now.getFullYear()
 
   for (let i = 0; i < 3; i++) {
     const daysInMonth = new Date(year, monthOfYear, 0).getDate()
-    const actualDay = Math.min(dayOfMonth, daysInMonth)
-    const candidate = new Date(year, monthOfYear - 1, actualDay, alarm.hour, alarm.minute, 0, 0)
-    if (candidate > now) {
+    // 找该月所有候选日中 > now 的最早一个
+    const candidates: Date[] = []
+    for (const day of daysOfMonth) {
+      const actualDay = Math.min(day, daysInMonth)
+      const candidate = new Date(year, monthOfYear - 1, actualDay, alarm.hour, alarm.minute, 0, 0)
+      if (candidate > now) candidates.push(candidate)
+    }
+    candidates.sort((a, b) => a.getTime() - b.getTime())
+
+    if (candidates.length > 0) {
+      const candidate = candidates[0]
       const adjusted = applyHoliday(candidate)
       if (adjusted) return adjusted
     }
@@ -577,7 +619,9 @@ export function formatRepeatDescription(repeat: RepeatRule): string {
         const weekLabel = repeat.weekOfMonth === -1 ? "最后一" : `第${repeat.weekOfMonth}`
         base = `每月${weekLabel}周星期${weekdayLabels[repeat.weekdayOfMonth - 1]}`
       } else {
-        base = repeat.interval === 1 ? `每月${repeat.dayOfMonth}号` : `每${repeat.interval}月 ${repeat.dayOfMonth}号`
+        const days = getDaysOfMonth(repeat).sort((a, b) => a - b)
+        const daysStr = days.join("、")
+        base = repeat.interval === 1 ? `每月${daysStr}号` : `每${repeat.interval}月 ${daysStr}号`
       }
       return base + holidaySuffix(repeat.holidayAction) + endConditionSuffix(repeat)
     }
@@ -593,7 +637,9 @@ export function formatRepeatDescription(repeat: RepeatRule): string {
         const weekLabel = repeat.weekOfMonth === -1 ? "最后一" : `第${repeat.weekOfMonth}`
         base = `每年${repeat.monthOfYear}月${weekLabel}周星期${weekdayLabels[repeat.weekdayOfMonth - 1]}`
       } else {
-        base = `每年${repeat.monthOfYear}月${repeat.dayOfMonth}号`
+        const days = getDaysOfMonth(repeat).sort((a, b) => a - b)
+        const daysStr = days.join("、")
+        base = `每年${repeat.monthOfYear}月${daysStr}号`
       }
       return base + holidaySuffix(repeat.holidayAction) + endConditionSuffix(repeat)
     }

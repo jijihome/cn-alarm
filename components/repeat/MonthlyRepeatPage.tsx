@@ -1,12 +1,12 @@
 // MonthlyRepeatPage.tsx - 每月模式专属设置页
-// 支持两种子模式：按日期（每月N号） / 按星期（每月第N周星期X）
+// 支持两种子模式：按日期（每月N号，支持多选） / 按星期（每月第N周星期X）
 // 状态模式：useObservable + subscribe 监听变化触发 sync
-import { useObservable, useEffect, List, Section, Text, Picker } from "scripting"
-import { RepeatRule, MonthlySubMode, HolidayAction } from "../../lib/constants"
+import { useObservable, useEffect, List, Section, Text, Picker, NavigationLink, HStack, Spacer } from "scripting"
+import { RepeatRule, MonthlySubMode, HolidayAction, getDaysOfMonth } from "../../lib/constants"
 import { WEEKDAY_LABELS } from "../../lib/constants"
 import { HolidayActionPicker } from "./HolidayActionPicker"
+import { DayOfMonthPicker, formatDaysOfMonth } from "../DayOfMonthPicker"
 
-const DAY_LABELS = Array.from({ length: 31 }, (_, i) => `${i + 1}号`)
 const WEEK_OF_MONTH_LABELS = ["第一周", "第二周", "第三周", "第四周", "最后一周"]
 const WEEK_OF_MONTH_VALUES = [1, 2, 3, 4, -1]
 const WEEKDAY_PICKER_LABELS = WEEKDAY_LABELS.map((l) => `星期${l}`)
@@ -21,11 +21,8 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
   const init = rule.value
   const initialSubModeIdx = SUB_MODE_VALUES.indexOf(init.monthlySubMode ?? "day")
   const subModeIdx = useObservable(initialSubModeIdx >= 0 ? initialSubModeIdx : 0)
-  const dayOfMonth = useObservable(init.dayOfMonth ?? 1)
-  const weekOfMonthIdx = useObservable(() => {
-    const idx = WEEK_OF_MONTH_VALUES.indexOf(init.weekOfMonth ?? 1)
-    return idx >= 0 ? idx : 0
-  })
+  const daysOfMonth = useObservable<number[]>(getDaysOfMonth(init))
+  const weekOfMonth = useObservable(init.weekOfMonth ?? 1)
   const weekdayOfMonth = useObservable(init.weekdayOfMonth ?? 2)
   const holidayAction = useObservable<HolidayAction>(init.holidayAction ?? "none")
 
@@ -39,9 +36,9 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
       holidayAction: holidayAction.value,
     }
     if (subMode === "day") {
-      newRule.dayOfMonth = dayOfMonth.value
+      newRule.daysOfMonth = daysOfMonth.value
     } else {
-      newRule.weekOfMonth = WEEK_OF_MONTH_VALUES[weekOfMonthIdx.value]
+      newRule.weekOfMonth = weekOfMonth.value
       newRule.weekdayOfMonth = weekdayOfMonth.value
     }
     rule.setValue(newRule)
@@ -51,14 +48,14 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
   useEffect(() => {
     const onLocalChange = () => { sync() }
     subModeIdx.subscribe(onLocalChange)
-    dayOfMonth.subscribe(onLocalChange)
-    weekOfMonthIdx.subscribe(onLocalChange)
+    daysOfMonth.subscribe(onLocalChange)
+    weekOfMonth.subscribe(onLocalChange)
     weekdayOfMonth.subscribe(onLocalChange)
     holidayAction.subscribe(onLocalChange)
     return () => {
       subModeIdx.unsubscribe(onLocalChange)
-      dayOfMonth.unsubscribe(onLocalChange)
-      weekOfMonthIdx.unsubscribe(onLocalChange)
+      daysOfMonth.unsubscribe(onLocalChange)
+      weekOfMonth.unsubscribe(onLocalChange)
       weekdayOfMonth.unsubscribe(onLocalChange)
       holidayAction.unsubscribe(onLocalChange)
     }
@@ -79,18 +76,21 @@ export function MonthlyRepeatPage({ rule }: MonthlyRepeatPageProps) {
 
       {subMode === "day" ? (
         <Section header={<Text>选择日期</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">2月无29/30/31号时将自动取当月最后一天</Text>}>
-          <Picker
-            title="每月第几天"
-            value={dayOfMonth as any}
+          <NavigationLink
+            destination={<DayOfMonthPicker value={daysOfMonth.value} onChanged={(v) => { daysOfMonth.setValue(v); sync() }} />}
           >
-            {DAY_LABELS.map((label, idx) => <Text key={idx} tag={idx + 1}>{label}</Text>)}
-          </Picker>
+            <HStack alignment="center">
+              <Text>已选日期</Text>
+              <Spacer />
+              <Text foregroundStyle="secondaryLabel">{formatDaysOfMonth(daysOfMonth.value)}</Text>
+            </HStack>
+          </NavigationLink>
         </Section>
       ) : (
         <Section header={<Text>选择星期</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">最后一周=该月最后一个该星期几</Text>}>
           <Picker
             title="第几周"
-            value={weekOfMonthIdx as any}
+            value={weekOfMonth as any}
           >
             {WEEK_OF_MONTH_LABELS.map((label, idx) => <Text key={idx} tag={WEEK_OF_MONTH_VALUES[idx]}>{label}</Text>)}
           </Picker>

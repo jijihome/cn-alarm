@@ -166,7 +166,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
   const presentEditor = (editId?: string) => {
     Navigation.present({
       element: <AddAlarm editId={editId} />,
-      modalPresentationStyle: "fullScreen",
+      modalPresentationStyle: "pageSheet",
     }).then((result: any) => {
       // 只有真正保存才处理调度和 toast
       if (result?.saved && result?.alarmId) {
