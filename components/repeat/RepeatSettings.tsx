@@ -4,7 +4,7 @@
 //      （NavigationLink push 的页面修改 Observable 后 dismiss 回来父页面不重渲染，
 //       改用 present + dismiss 返回值 + .then() 回调更新 rule）
 //   2. "设置" 行 → NavigationLink push 到当前模式的专属设置页
-import { Text, List, Section, NavigationLink, NavigationStack, Button, Navigation, HStack, Spacer } from "scripting"
+import { Text, List, Section, NavigationLink, NavigationStack, Button, Navigation, HStack, Spacer, Image } from "scripting"
 import { RepeatMode, RepeatRule } from "../../lib/constants"
 import { formatRepeatDescription } from "../../lib/scheduler"
 import { buildRepeatRule } from "../../lib/repeat-rule-builder"
@@ -69,6 +69,7 @@ export function RepeatSettings({ rule }: RepeatSettingsProps) {
             <Text>模式</Text>
             <Spacer />
             <Text foregroundStyle="secondaryLabel">{currentLabel}</Text>
+            <Image systemName="chevron.right" imageScale="small" foregroundStyle="tertiaryLabel" />
           </HStack>
         </Button>
         <NavigationLink

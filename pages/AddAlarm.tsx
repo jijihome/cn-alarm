@@ -18,10 +18,11 @@ const COLOR_OPTIONS = [
 ]
 
 const DEFAULT_REPEAT_RULE: RepeatRule = {
-  mode: "weekly",
+  mode: "monthly",
   interval: 1,
   holidayAction: "none",
-  weekdays: [2, 3, 4, 5, 6],
+  monthlySubMode: "day",
+  daysOfMonth: [1],
 }
 
 const DEFAULT_RETRY_CONFIG: RetryConfig = {
