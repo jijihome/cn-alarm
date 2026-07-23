@@ -8,6 +8,7 @@ import { sortAlarms, ALARM_SORT_OPTIONS, alarmSortTitle } from "../lib/sort"
 import { AlarmRow } from "../components/AlarmRow"
 import { AddAlarm } from "./AddAlarm"
 import { Settings } from "./Settings"
+import { AlarmFilterSheet, AlarmFilter, DEFAULT_FILTER, hasActiveFilter } from "../components/AlarmFilterSheet"
 
 /** 模态弹出设置页 */
 const presentSettings = () =>
@@ -34,10 +35,26 @@ function disableExpiredAlarms(): boolean {
   return changed
 }
 
-/** 加载并排序用户闹钟（含到期自动禁用） */
-const loadSortedUserAlarms = (sortBy: AlarmSortKey, ascending: boolean): AlarmItem[] => {
+/** 加载并排序用户闹钟（含到期自动禁用），可选筛选 */
+const loadSortedUserAlarms = (sortBy: AlarmSortKey, ascending: boolean, filter?: AlarmFilter): AlarmItem[] => {
   disableExpiredAlarms()
-  return sortAlarms(loadAlarms().filter((a) => a.source !== "credit_card"), sortBy, ascending)
+  let result = sortAlarms(loadAlarms().filter((a) => a.source !== "credit_card"), sortBy, ascending)
+  if (filter && hasActiveFilter(filter)) {
+    result = result.filter(a => {
+      if (filter.enabledFilter === "on" && !a.enabled) return false
+      if (filter.enabledFilter === "off" && a.enabled) return false
+      if (filter.groupFilter !== "") {
+        if (filter.groupFilter === "__none__") {
+          if (a.groupName !== "") return false
+        } else {
+          if (a.groupName !== filter.groupFilter) return false
+        }
+      }
+      if (filter.modeFilter !== "" && a.repeat.mode !== filter.modeFilter) return false
+      return true
+    })
+  }
+  return result
 }
 
 /** 构建分类名→颜色映射 */
@@ -96,8 +113,11 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
   // 从设置读取排序偏好
   const currentSort = useObservable<AlarmSortKey>(() => loadSettings().alarmSortBy ?? "time")
   const sortAsc = useObservable<boolean>(() => loadSettings().alarmSortAsc ?? true)
-  const alarms = useObservable<AlarmItem[]>(() => loadSortedUserAlarms(currentSort.value, sortAsc.value))
+  // 筛选状态（必须在 alarms 之前声明，因为 alarms initializer 引用 filterState）
+  const filterState = useObservable<AlarmFilter>(() => ({ ...DEFAULT_FILTER }))
+  const alarms = useObservable<AlarmItem[]>(() => loadSortedUserAlarms(currentSort.value, sortAsc.value, filterState.value))
   const groupColorMap = useObservable<Record<string, string>>(() => buildGroupColorMap())
+
   // toast 状态
   const [toastMsg, setToastMsg] = useState("")
   const [toastShown, setToastShown] = useState(false)
@@ -115,7 +135,8 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
     sortAsc.setValue(newAsc)
     const settings = loadSettings()
     saveSettings({ ...settings, alarmSortBy: key, alarmSortAsc: newAsc })
-    alarms.setValue(loadSortedUserAlarms(key, newAsc))
+    skipDeleteCheck.setValue(true)
+    alarms.setValue(loadSortedUserAlarms(key, newAsc, filterState.value))
     setToastMsg(`排序: ${opt?.label ?? key}`)
     setToastShown(true)
   }
@@ -133,7 +154,8 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
     sortAsc.setValue(newAsc)
     const settings = loadSettings()
     saveSettings({ ...settings, alarmSortAsc: newAsc })
-    alarms.setValue(loadSortedUserAlarms(currentSort.value, newAsc))
+    skipDeleteCheck.setValue(true)
+    alarms.setValue(loadSortedUserAlarms(currentSort.value, newAsc, filterState.value))
     setToastMsg(`${opt?.label ?? currentSort.value} ${newAsc ? "升序" : "降序"}`)
     setToastShown(true)
   }
@@ -141,30 +163,39 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
   // 监听 Tab 切换：切回闹钟 Tab 时重新加载（其他页面可能改了调休/分类/闹钟数据）
   useEffect(() => {
     if (selection.value === 1) {
-      alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
+      skipDeleteCheck.setValue(true)
+      alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value, filterState.value))
       groupColorMap.setValue(buildGroupColorMap())
     }
   }, [selection.value])
 
   // 同步 alarms Observable → Storage（swipe 删除后自动触发）
+  // 筛选变化时跳过删除检测（筛选只是隐藏，不是真删除）
+  const skipDeleteCheck = useObservable<boolean>(() => false)
   const prevAlarmIdsRef = useObservable<string[]>(() => alarms.value.map(a => a.id))
   useEffect(() => {
+    if (skipDeleteCheck.value) {
+      skipDeleteCheck.setValue(false)
+      prevAlarmIdsRef.setValue(alarms.value.map(a => a.id))
+      return
+    }
     const currentIds = new Set(alarms.value.map(a => a.id))
     const prevIds = prevAlarmIdsRef.value
     // 找出被删除的 id
     const deletedIds = prevIds.filter(id => !currentIds.has(id))
     if (deletedIds.length > 0) {
       // 取消被删闹钟的全部系统闹钟+重试提醒
-      const oldAlarms = loadSortedUserAlarms(currentSort.value, sortAsc.value)
+      const oldAlarms = loadAlarms().filter(a => a.source !== "credit_card")
       for (const delId of deletedIds) {
         const oldAlarm = oldAlarms.find(a => a.id === delId)
         if (oldAlarm) {
           cancelAllAlarms(oldAlarm)
         }
       }
-      // 同步到 storage（保留信用卡闹钟，只更新用户闹钟部分）
+      // 同步到 storage（保留信用卡闹钟+被筛掉的闹钟，只更新用户闹钟部分）
       const cardAlarms = loadAlarms().filter(a => a.source === "credit_card")
-      saveAlarms([...alarms.value, ...cardAlarms])
+      const filteredOutAlarms = loadAlarms().filter(a => a.source !== "credit_card" && !currentIds.has(a.id))
+      saveAlarms([...alarms.value, ...filteredOutAlarms, ...cardAlarms])
       // 显示toast
       setToastMsg(deletedIds.length === 1 ? "闹钟已删除" : `已删除${deletedIds.length}个闹钟`)
       setToastShown(true)
@@ -181,11 +212,11 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
     }).then((result: any) => {
       // 只有真正保存才处理调度和 toast
       if (result?.saved && result?.alarmId) {
-        const alarm = loadSortedUserAlarms(currentSort.value, sortAsc.value).find(a => a.id === result.alarmId)
+        const alarm = loadAlarms().find(a => a.id === result.alarmId)
         if (alarm && alarm.enabled) {
           // 先取消旧的系统闹钟+重试（编辑场景）
           if (alarm.alarmIds.length > 0) {
-            cancelAllAlarms(loadSortedUserAlarms(currentSort.value, sortAsc.value).find(a => a.id === result.alarmId) ?? alarm).catch(() => {})
+            cancelAllAlarms(loadAlarms().find(a => a.id === result.alarmId) ?? alarm).catch(() => {})
           }
           // 重新调度系统闹钟
           scheduleAlarm(alarm).then((result: ScheduleResult | null) => {
@@ -196,19 +227,45 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
               setToastMsg("闹钟已保存，但系统调度失败")
             }
             setToastShown(true)
-            alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
+            skipDeleteCheck.setValue(true)
+            alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value, filterState.value))
           })
         } else {
           setToastMsg(editId ? "闹钟已更新" : "闹钟已添加")
           setToastShown(true)
         }
       }
-      alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
+      skipDeleteCheck.setValue(true)
+      alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value, filterState.value))
     })
   }
 
   const handleAdd = () => presentEditor()
   const handleEdit = (id: string) => presentEditor(id)
+
+  // 弹出筛选 Sheet
+  const presentFilter = () => {
+    Navigation.present({
+      element: <AlarmFilterSheet initialFilter={filterState.value} />,
+      modalPresentationStyle: "pageSheet",
+    }).then((result: AlarmFilter | undefined) => {
+      if (result) {
+        filterState.setValue(result)
+        // 筛选变化时跳过删除检测（只是视图过滤，不是真删除）
+        skipDeleteCheck.setValue(true)
+        const filtered = loadSortedUserAlarms(currentSort.value, sortAsc.value, result)
+        alarms.setValue(filtered)
+        // 显示筛选结果数量
+        const total = loadSortedUserAlarms(currentSort.value, sortAsc.value).length
+        if (hasActiveFilter(result)) {
+          setToastMsg(filtered.length === total ? `筛选: 全部 ${total} 个闹钟` : `筛选: ${filtered.length} / ${total} 个闹钟`)
+        } else {
+          setToastMsg(`共 ${total} 个闹钟`)
+        }
+        setToastShown(true)
+      }
+    })
+  }
 
   // 确认所有未确认时间点：取消重试提醒，标记已确认
   const handleConfirm = (alarm: AlarmItem) => {
@@ -245,7 +302,8 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
       cancelRetryAlarms(alarm).catch(() => {})
     }
     setToastShown(true)
-    alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
+    skipDeleteCheck.setValue(true)
+    alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value, filterState.value))
   }
 
   const handleUnconfirm = (alarm: AlarmItem) => {
@@ -253,7 +311,8 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
     unconfirmAllReminders(alarm.id, today)
     setToastMsg(`已取消确认: ${alarm.title}`)
     setToastShown(true)
-    alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
+    skipDeleteCheck.setValue(true)
+    alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value, filterState.value))
   }
 
   const handleToggle = (id: string, enabled: boolean) => {
@@ -263,7 +322,8 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
     if (enabled) {
       // 启用：先立即更新本地状态，再异步创建系统闹钟
       updateAlarm(id, { enabled: true, alarmIds: [], retryAlarmIds: [] })
-      alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
+      skipDeleteCheck.setValue(true)
+      alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value, filterState.value))
       scheduleAlarm(alarm).then((result: ScheduleResult | null) => {
         if (result) {
           updateAlarm(id, { alarmIds: result.allAlarmIds, retryAlarmIds: result.retryIds })
@@ -275,13 +335,15 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
           setToastMsg("系统提醒创建失败，闹钟未启用")
           setToastShown(true)
         }
-        alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
+        skipDeleteCheck.setValue(true)
+        alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value, filterState.value))
       })
     } else {
       // 停用：先立即更新本地状态，再异步取消全部闹钟+重试
-      const oldAlarm = loadSortedUserAlarms(currentSort.value, sortAsc.value).find(a => a.id === id) ?? alarm
+      const oldAlarm = loadAlarms().find(a => a.id === id) ?? alarm
       updateAlarm(id, { enabled: false, alarmIds: [], retryAlarmIds: [] })
-      alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
+      skipDeleteCheck.setValue(true)
+      alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value, filterState.value))
       setToastMsg("闹钟已停用")
       setToastShown(true)
       // 异步取消全部闹钟+重试（fire-and-forget）
@@ -302,6 +364,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
           ),
           topBarTrailing: (
             <HStack spacing={0}>
+              <Button title="" systemImage={hasActiveFilter(filterState.value) ? "line.horizontal.3.decrease.circle.fill" : "line.horizontal.3.decrease.circle"} action={presentFilter} />
               <Button title="" systemImage="arrow.up.arrow.down" action={() => sortShown.setValue(true)} />
               <Button title="" systemImage={sortAsc.value ? "chevron.up" : "chevron.down"} action={toggleSortDir} />
               <Button title="" systemImage="gearshape" action={presentSettings} />
@@ -323,7 +386,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
         }}
       >
         <Section>
-          <NextAlarmCard alarms={alarms.value} />
+          <NextAlarmCard alarms={loadAlarms().filter(a => a.source !== "credit_card")} />
         </Section>
 
         {alarms.value.length === 0 ? (
