@@ -5,6 +5,17 @@ import { isHoliday, isWorkday, formatDate } from "./holiday"
 import { lunarToSolar } from "./lunar"
 import { getNextSolarTerm } from "./solar-term"
 
+// ==================== 日期触发判断 ====================
+
+/** 判断闹钟是否在指定日期触发（用 getNextTrigger 精确判断） */
+export function isAlarmToday(alarm: AlarmItem, date: Date): boolean {
+  const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0)
+  const trigger = getNextTrigger(alarm, startOfDay)
+  if (!trigger) return false
+  return trigger.getFullYear() === date.getFullYear()
+    && trigger.getMonth() === date.getMonth()
+    && trigger.getDate() === date.getDate()
+}
 
 // ==================== 结束条件判断 ====================
 

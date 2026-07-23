@@ -1,6 +1,7 @@
 // credit-card.ts - 信用卡还款日计算+闹钟生成
 import { STORAGE_KEYS, CreditCard, AlarmItem, BANK_PRESETS, ReminderTypeConfig, RetryConfig, RetryType } from "./constants"
 import { generateUUID, addAlarm, updateAlarm, removeAlarm, loadAlarms, saveAlarms, createAlarmItem, confirmReminder, unconfirmAllReminders, getUnconfirmedTimes } from "./alarm-store"
+import { isAlarmToday } from "./scheduler"
 import { scheduleAlarm, cancelAlarm, cancelAllAlarms, cancelRetryAlarms } from "./alarm-bridge"
 
 const SHARED = { shared: true }
@@ -392,12 +393,49 @@ export function getCardUnconfirmedCount(card: CreditCard): number {
   return count
 }
 
+/** 从闹钟 title 提取语义后缀（去掉"银行名(尾号) "前缀） */
+function extractTitleSuffix(title: string): string {
+  const match = title.match(/\)\s+(.+)$/)
+  return match ? match[1] : title
+}
+
+/** 格式化时间为 HH:MM */
+function fmtHM(hour: number, minute: number): string {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`
+}
+
+/** 获取一张信用卡的未确认提醒详情（今天），返回格式化字符串 */
+export function getCardUnconfirmedDetails(card: CreditCard): string {
+  if (!card.retryConfig?.enabled) return ""
+  const allAlarms = loadAlarms()
+  const cardAlarms = allAlarms.filter((a) => card.alarmItemIds.includes(a.id) && a.retryConfig?.enabled)
+  const today = new Date()
+  const items: string[] = []
+  for (const alarm of cardAlarms) {
+    const suffix = extractTitleSuffix(alarm.title)
+    for (const t of getUnconfirmedTimes(alarm, today)) {
+      items.push(`${suffix}${fmtHM(t.hour, t.minute)}`)
+    }
+  }
+  // 按时间排序（提取 HH:MM 部分排序）
+  items.sort((a, b) => {
+    const timeA = a.match(/(\d{2}:\d{2})$/)?.[1] ?? ""
+    const timeB = b.match(/(\d{2}:\d{2})$/)?.[1] ?? ""
+    return timeA.localeCompare(timeB)
+  })
+  // 最多显示4条，超出截断
+  const MAX_SHOW = 4
+  if (items.length <= MAX_SHOW) return items.join(", ")
+  return `${items.slice(0, MAX_SHOW).join(", ")}等${items.length}条`
+}
+
 /** 确认一张信用卡的所有未确认提醒：标记已确认 + 取消重试闹钟 */
 export function confirmCardReminders(card: CreditCard): void {
   const allAlarms = loadAlarms()
   const cardAlarms = allAlarms.filter((a) => card.alarmItemIds.includes(a.id))
   const today = new Date()
   for (const alarm of cardAlarms) {
+    if (!isAlarmToday(alarm, today)) continue
     const unconfirmed = getUnconfirmedTimes(alarm, today)
     for (const t of unconfirmed) {
       confirmReminder(alarm.id, today, t.hour, t.minute)
@@ -413,6 +451,7 @@ export function unconfirmCardReminders(card: CreditCard): void {
   const cardAlarms = allAlarms.filter((a) => card.alarmItemIds.includes(a.id))
   const today = new Date()
   for (const alarm of cardAlarms) {
+    if (!isAlarmToday(alarm, today)) continue
     unconfirmAllReminders(alarm.id, today)
   }
 }

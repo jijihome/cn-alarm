@@ -213,7 +213,7 @@ export function AddCreditCard({ editId }: AddCreditCardProps) {
             onDecrement={() => graceDays.setValue(Math.max(15, graceDays.value - 1))}
           >
             <HStack alignment="center">
-              <Text>账单到还款日</Text>
+              <Text>免息期</Text>
               <Spacer />
               <Text foregroundStyle="secondaryLabel">{graceDays.value}天</Text>
             </HStack>

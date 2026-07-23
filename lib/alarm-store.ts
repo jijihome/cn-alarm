@@ -1,5 +1,6 @@
 // alarm-store.ts - 闹钟数据 CRUD + Storage 操作
 import { STORAGE_KEYS, DEFAULT_GROUPS, DEFAULT_SETTINGS, DEFAULT_HOLIDAYS, AlarmItem, AlarmGroup, AppSettings, normalizeRule } from "./constants"
+import { isAlarmToday } from "./scheduler"
 
 // ==================== Storage 共享选项 ====================
 const SHARED = { shared: true }
@@ -230,8 +231,9 @@ export function isReminderConfirmed(alarm: AlarmItem, date: Date, hour: number, 
   return !!(alarm.confirmedReminders && alarm.confirmedReminders[key])
 }
 
-/** 获取某闹钟今天所有未确认的时间点 */
+/** 获取某闹钟指定日期所有未确认的时间点（仅当闹钟在该日期触发时） */
 export function getUnconfirmedTimes(alarm: AlarmItem, date: Date): { hour: number; minute: number }[] {
+  if (!isAlarmToday(alarm, date)) return []
   const allTimes = [
     { hour: alarm.hour, minute: alarm.minute },
     ...(alarm.reminderTimes ?? [])

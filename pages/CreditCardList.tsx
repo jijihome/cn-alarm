@@ -1,7 +1,7 @@
 // CreditCardList.tsx - 信用卡列表页
 import { useState, useObservable, NavigationStack, List, Section, Text, ForEach, Button, HStack, VStack, Toggle, ContentUnavailableView, Navigation, useEffect } from "scripting"
 import { CreditCard, CardSortKey } from "../lib/constants"
-import { loadCards, updateCard, getNextDueDate, formatDateCN, syncCardAlarmsById, cancelCardAlarmsById, getCardUnconfirmedCount, confirmCardReminders, unconfirmCardReminders, removeCardSync } from "../lib/credit-card"
+import { loadCards, updateCard, getNextDueDate, formatDateCN, syncCardAlarmsById, cancelCardAlarmsById, getCardUnconfirmedCount, getCardUnconfirmedDetails, confirmCardReminders, unconfirmCardReminders, removeCardSync } from "../lib/credit-card"
 import { sortCards, CARD_SORT_OPTIONS } from "../lib/sort"
 import { loadSettings, saveSettings } from "../lib/alarm-store"
 import { AddCreditCard } from "./AddCreditCard"
@@ -29,7 +29,6 @@ function reminderSummary(card: CreditCard): string {
     if (rt.buffer.enabled) parts.push(`宽限${fmtTime(rt.buffer.hour, rt.buffer.minute)}${typeLabel(rt.buffer.type)}${extraCount(rt.buffer.extraTimes)}`)
   }
   let summary = parts.length ? parts.join(" · ") : "无提醒"
-  // 重试状态
   if (card.retryConfig?.enabled) {
     summary += ` · 重复${card.retryConfig.maxRetries}次/${card.retryConfig.intervalMinutes}分`
   }
@@ -48,6 +47,7 @@ function CardRow({ card, onEdit, onToggle, onConfirm, onUnconfirm }: { card: Cre
 
   // 确认状态
   const unconfirmedCount = getCardUnconfirmedCount(card)
+  const unconfirmedDetail = getCardUnconfirmedDetails(card)
   const hasRetry = !!card.retryConfig?.enabled
   const hasUnconfirmed = hasRetry && unconfirmedCount > 0
   const allConfirmed = hasRetry && unconfirmedCount === 0
@@ -75,7 +75,7 @@ function CardRow({ card, onEdit, onToggle, onConfirm, onUnconfirm }: { card: Cre
         </HStack>
         <HStack spacing={12}>
           <Text font={13} foregroundStyle="secondaryLabel">账单日{card.statementDay}号</Text>
-          <Text font={13} foregroundStyle="secondaryLabel">还款日约{card.graceDays}天后</Text>
+          <Text font={13} foregroundStyle="secondaryLabel">免息期{card.graceDays}天</Text>
         </HStack>
         <HStack spacing={8}>
           <Text font={14} fontWeight="semibold" foregroundStyle="systemOrange">下次还款: {dueStr}</Text>
@@ -85,7 +85,7 @@ function CardRow({ card, onEdit, onToggle, onConfirm, onUnconfirm }: { card: Cre
         </HStack>
         <Text font={12} foregroundStyle="tertiaryLabel">{reminderSummary(card)}</Text>
         {hasUnconfirmed && (
-          <Text font={12} foregroundStyle="systemOrange">待确认: {unconfirmedCount}条提醒</Text>
+          <Text font={12} foregroundStyle="systemOrange">待确认: {unconfirmedDetail}</Text>
         )}
         {allConfirmed && (
           <Text font={12} foregroundStyle="systemGreen">今日已全部确认</Text>

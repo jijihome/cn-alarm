@@ -177,7 +177,7 @@ function CardSearchRow({ card, onEdit }: { card: CreditCard; onEdit: (id: string
         <Text font={15} foregroundStyle="secondaryLabel">尾号{card.last4Digits}</Text>
       </HStack>
       <Text font={13} foregroundStyle="secondaryLabel">
-        账单日{card.statementDay}号 · 还款日约{card.graceDays}天后
+        账单日{card.statementDay}号 · 免息期{card.graceDays}天
       </Text>
     </VStack>
   )
