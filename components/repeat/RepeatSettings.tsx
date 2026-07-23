@@ -32,16 +32,14 @@ interface RepeatSettingsProps {
 }
 
 export function RepeatSettings({ rule }: RepeatSettingsProps) {
-  const mode = rule.value.mode
-
   return (
     <>
       <Section header={<Text>重复</Text>}>
         <Picker
           title="模式"
-          value={mode as string}
+          value={rule.value.mode as string}
           onChanged={(newMode: string) => {
-            if (newMode !== mode) {
+            if (newMode !== rule.value.mode) {
               rule.setValue(buildRepeatRule(newMode as RepeatMode, rule.value))
             }
           }}
@@ -54,16 +52,16 @@ export function RepeatSettings({ rule }: RepeatSettingsProps) {
       </Section>
 
       {/* 各模式的具体设置项，内联渲染 */}
-      {mode === "once" && <OnceRepeatSection rule={rule} />}
-      {mode === "daily" && <DailyRepeatSection rule={rule} />}
-      {mode === "weekly" && <WeeklyRepeatSection rule={rule} />}
-      {mode === "monthly" && <MonthlyRepeatSection rule={rule} />}
-      {mode === "yearly" && <YearlyRepeatSection rule={rule} />}
-      {mode === "lunar_yearly" && <LunarRepeatSection rule={rule} />}
-      {mode === "workday" && <WorkdayRepeatSection rule={rule} />}
+      {rule.value.mode === "once" && <OnceRepeatSection rule={rule} />}
+      {rule.value.mode === "daily" && <DailyRepeatSection rule={rule} />}
+      {rule.value.mode === "weekly" && <WeeklyRepeatSection rule={rule} />}
+      {rule.value.mode === "monthly" && <MonthlyRepeatSection rule={rule} />}
+      {rule.value.mode === "yearly" && <YearlyRepeatSection rule={rule} />}
+      {rule.value.mode === "lunar_yearly" && <LunarRepeatSection rule={rule} />}
+      {rule.value.mode === "workday" && <WorkdayRepeatSection rule={rule} />}
 
       {/* once 模式不需要结束条件（本身一次性） */}
-      {mode !== "once" && <EndConditionPicker rule={rule} />}
+      {rule.value.mode !== "once" && <EndConditionPicker rule={rule} />}
     </>
   )
 }
