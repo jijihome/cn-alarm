@@ -140,7 +140,7 @@ export function CreditCardList({ selection }: { selection: Observable<number> })
 
   // 监听 Tab 切换：切回信用卡 Tab 时重新加载
   useEffect(() => {
-    if (selection.value === 1) {
+    if (selection.value === 2) {
       cards.setValue(loadSortedCards(currentSort.value, sortAsc.value))
     }
   }, [selection.value])

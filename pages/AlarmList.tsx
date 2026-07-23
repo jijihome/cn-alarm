@@ -130,7 +130,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
 
   // 监听 Tab 切换：切回闹钟 Tab 时重新加载（其他页面可能改了调休/分类/闹钟数据）
   useEffect(() => {
-    if (selection.value === 0) {
+    if (selection.value === 1) {
       alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
     }
   }, [selection.value])

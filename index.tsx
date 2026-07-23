@@ -1,5 +1,6 @@
 // index.tsx - 主入口
 import { Script, Navigation, TabView, Tab, useObservable } from "scripting"
+import { TodayAlarms } from "./pages/TodayAlarms"
 import { AlarmList } from "./pages/AlarmList"
 import { CreditCardList } from "./pages/CreditCardList"
 import { SearchView } from "./pages/SearchView"
@@ -14,16 +15,19 @@ function RootView() {
       selection={selection}
       tabViewSearchActivation="searchTabSelection"
     >
-      <Tab title="闹钟" systemImage="alarm.fill" value={0}>
+      <Tab title="今日" systemImage="bell.badge.fill" value={0}>
+        <TodayAlarms selection={selection} />
+      </Tab>
+      <Tab title="闹钟" systemImage="alarm.fill" value={1}>
         <AlarmList selection={selection} />
       </Tab>
-      <Tab title="信用卡" systemImage="creditcard.fill" value={1}>
+      <Tab title="信用卡" systemImage="creditcard.fill" value={2}>
         <CreditCardList selection={selection} />
       </Tab>
       <Tab
         title="搜索"
         systemImage="magnifyingglass"
-        value={2}
+        value={3}
         role="search"
       >
         <SearchView />
