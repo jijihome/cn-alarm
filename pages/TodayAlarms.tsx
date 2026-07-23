@@ -1,9 +1,10 @@
 // TodayAlarms.tsx - 今日闹铃页面：显示今日所有闹铃，分待确认/已响铃/未响铃
-import { useState, useObservable, NavigationStack, List, Section, Text, HStack, VStack, Image, ContentUnavailableView, Button, useEffect } from "scripting"
+import { useState, useObservable, NavigationStack, List, Section, Text, HStack, VStack, Image, ContentUnavailableView, Button, useEffect, Navigation } from "scripting"
 import { AlarmItem } from "../lib/constants"
 import { loadAlarms, isReminderConfirmed, confirmReminder, unconfirmAllReminders } from "../lib/alarm-store"
 import { isAlarmToday, formatRepeatDescription } from "../lib/scheduler"
 import { cancelRetryAlarms } from "../lib/alarm-bridge"
+import { Settings } from "./Settings"
 
 // ==================== 数据模型 ====================
 
@@ -70,13 +71,15 @@ function loadTodayAlarms(): AlarmTimePoint[] {
 /** 三段分组：待确认 / 已响铃 / 未响铃 */
 function groupByStatus(points: AlarmTimePoint[]): {
   unconfirmed: AlarmTimePoint[]   // 已触发 + 未确认
-  triggered: AlarmTimePoint[]     // 已触发 + 已确认/无需确认
+  confirmed: AlarmTimePoint[]     // 已触发 + 已确认
+  triggered: AlarmTimePoint[]     // 已触发 + 无需确认（无重试）
   pending: AlarmTimePoint[]       // 时间还没到
 } {
   const now = new Date()
   const currentMinutes = now.getHours() * 60 + now.getMinutes()
 
   const unconfirmed: AlarmTimePoint[] = []
+  const confirmed: AlarmTimePoint[] = []
   const triggered: AlarmTimePoint[] = []
   const pending: AlarmTimePoint[] = []
 
@@ -85,12 +88,14 @@ function groupByStatus(points: AlarmTimePoint[]): {
       pending.push(p)
     } else if (p.alarm.retryConfig?.enabled && !p.confirmed) {
       unconfirmed.push(p)
+    } else if (p.alarm.retryConfig?.enabled && p.confirmed) {
+      confirmed.push(p)
     } else {
       triggered.push(p)
     }
   }
 
-  return { unconfirmed, triggered, pending }
+  return { unconfirmed, confirmed, triggered, pending }
 }
 
 // ==================== 行组件 ====================
@@ -174,6 +179,10 @@ function AlarmTimeRow({ point, onConfirm, onUnconfirm }: AlarmTimeRowProps) {
 
 // ==================== 页面组件 ====================
 
+/** 模态弹出设置页 */
+const presentSettings = () =>
+  Navigation.present({ element: <Settings />, modalPresentationStyle: "pageSheet" })
+
 export function TodayAlarms({ selection }: { selection: Observable<number> }) {
   const allPoints = useObservable<AlarmTimePoint[]>(() => loadTodayAlarms())
   const [toastMsg, setToastMsg] = useState("")
@@ -218,8 +227,8 @@ export function TodayAlarms({ selection }: { selection: Observable<number> }) {
     allPoints.setValue(loadTodayAlarms())
   }
 
-  const { unconfirmed, triggered, pending } = groupByStatus(allPoints.value)
-  const hasAny = unconfirmed.length > 0 || triggered.length > 0 || pending.length > 0
+  const { unconfirmed, confirmed, triggered, pending } = groupByStatus(allPoints.value)
+  const hasAny = unconfirmed.length > 0 || triggered.length > 0 || confirmed.length > 0 || pending.length > 0
 
   // 今日日期显示
   const today = new Date()
@@ -231,6 +240,14 @@ export function TodayAlarms({ selection }: { selection: Observable<number> }) {
     <NavigationStack>
       <List
         navigationTitle="今日闹铃"
+        toolbar={{
+          topBarTrailing: (
+            <HStack spacing={0}>
+              <Button title="" systemImage="arrow.clockwise" action={() => allPoints.setValue(loadTodayAlarms())} />
+              <Button title="" systemImage="gearshape" action={presentSettings} />
+            </HStack>
+          ),
+        }}
         toast={{
           message: toastMsg,
           isPresented: toastShown,
@@ -250,6 +267,12 @@ export function TodayAlarms({ selection }: { selection: Observable<number> }) {
                   <VStack alignment="center" spacing={2}>
                     <Text font={28} fontWeight="bold" foregroundStyle="systemOrange">{unconfirmed.length}</Text>
                     <Text font={12} foregroundStyle="systemOrange">待确认</Text>
+                  </VStack>
+                )}
+                {confirmed.length > 0 && (
+                  <VStack alignment="center" spacing={2}>
+                    <Text font={28} fontWeight="bold" foregroundStyle="systemGreen">{confirmed.length}</Text>
+                    <Text font={12} foregroundStyle="systemGreen">已确认</Text>
                   </VStack>
                 )}
                 <VStack alignment="center" spacing={2}>
@@ -285,7 +308,16 @@ export function TodayAlarms({ selection }: { selection: Observable<number> }) {
           </Section>
         )}
 
-        {/* 已响铃 */}
+        {/* 已确认 */}
+        {confirmed.length > 0 && (
+          <Section header={<Text font={14} foregroundStyle="systemGreen">已确认</Text>}>
+            {confirmed.map((p, idx) => (
+              <AlarmTimeRow key={`c-${p.alarm.id}-${idx}`} point={p} onConfirm={handleConfirm} onUnconfirm={handleUnconfirm} />
+            ))}
+          </Section>
+        )}
+
+        {/* 已响铃（无需确认） */}
         {triggered.length > 0 && (
           <Section header={<Text font={14} foregroundStyle="secondaryLabel">已响铃</Text>}>
             {triggered.map((p, idx) => (

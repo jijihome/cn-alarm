@@ -1,12 +1,13 @@
 // RepeatSettings.tsx - 重复模式设置
 // 交互设计：
-//   1. "模式" 行 → NavigationLink push 到模式选择页（原生右箭头指示）
+//   1. "模式" 行 → Button + Navigation.present 模态弹出模式选择页
+//      （NavigationLink push 的页面修改 Observable 后 dismiss 回来父页面不重渲染，
+//       改用 present + dismiss 返回值 + .then() 回调更新 rule）
 //   2. "设置" 行 → NavigationLink push 到当前模式的专属设置页
-// 响应式：所有显示直接读 rule.value（props Observable），rule.setValue 触发
-//        AddAlarm 重渲染 → RepeatSettings 作为子组件重渲染 → 显示自动更新
 import { Text, List, Section, NavigationLink, NavigationStack, Button, Navigation, HStack, Spacer } from "scripting"
-import { RepeatMode, RepeatRule, getDaysOfMonth } from "../../lib/constants"
+import { RepeatMode, RepeatRule } from "../../lib/constants"
 import { formatRepeatDescription } from "../../lib/scheduler"
+import { buildRepeatRule } from "../../lib/repeat-rule-builder"
 
 import { WeeklyRepeatPage } from "./WeeklyRepeatPage"
 import { DailyRepeatPage } from "./DailyRepeatPage"
@@ -27,21 +28,12 @@ const REPEAT_MODES: { value: RepeatMode; label: string }[] = [
   { value: "workday", label: "每工作日" },
 ]
 
-const DEFAULT_RULE: RepeatRule = {
-  mode: "weekly",
-  interval: 1,
-  holidayAction: "none",
-  weekdays: [2, 3, 4, 5, 6],
-}
-
 interface RepeatSettingsProps {
   initialValue?: RepeatRule
   rule: Observable<RepeatRule>
 }
 
 export function RepeatSettings({ rule }: RepeatSettingsProps) {
-  // 直接读 rule.value：rule.setValue 触发 AddAlarm 重渲染，
-  // RepeatSettings 作为子组件随之重渲染，显示自动更新
   const mode = rule.value.mode
   const currentLabel = REPEAT_MODES.find((m) => m.value === mode)?.label ?? ""
   const summary = formatRepeatDescription(rule.value)
@@ -58,16 +50,27 @@ export function RepeatSettings({ rule }: RepeatSettingsProps) {
     }
   })()
 
+  const presentModePicker = () => {
+    Navigation.present({
+      element: <RepeatModePickerPage currentMode={rule.value.mode} />,
+    }).then((result) => {
+      if (result?.selectedMode && result.selectedMode !== rule.value.mode) {
+        const newRule = buildRepeatRule(result.selectedMode, rule.value)
+        rule.setValue(newRule)
+      }
+    })
+  }
+
   return (
     <>
       <Section header={<Text>重复</Text>}>
-        <NavigationLink destination={<RepeatModePickerPage rule={rule} />}>
+        <Button action={presentModePicker}>
           <HStack alignment="center">
             <Text>模式</Text>
             <Spacer />
             <Text foregroundStyle="secondaryLabel">{currentLabel}</Text>
           </HStack>
-        </NavigationLink>
+        </Button>
         <NavigationLink
           destination={settingsDestination}
         >
@@ -84,66 +87,34 @@ export function RepeatSettings({ rule }: RepeatSettingsProps) {
   )
 }
 
-// ==================== 模式选择页（单选列表，push 进入） ====================
-function RepeatModePickerPage({ rule }: { rule: Observable<RepeatRule> }) {
+// ==================== 模式选择页（模态弹出，dismiss 返回选择结果） ====================
+function RepeatModePickerPage({ currentMode }: { currentMode: RepeatMode }) {
   const dismiss = Navigation.useDismiss()
-  // 直接读 rule.value.mode：rule.setValue 触发 AddAlarm 重渲染，
-  // push 进来的页面随父级重渲染，✓ 标记自动更新
   const selectMode = (mode: RepeatMode) => {
-    if (mode === rule.value.mode) return
-    const newRule: RepeatRule = {
-      mode,
-      interval: 1,
-      holidayAction: rule.value.holidayAction ?? "none",
-    }
-    if (mode === "weekly") {
-      newRule.weekdays = rule.value.weekdays ?? [2, 3, 4, 5, 6]
-    }
-    if (mode === "monthly") {
-      newRule.monthlySubMode = rule.value.monthlySubMode ?? "day"
-      newRule.daysOfMonth = getDaysOfMonth(rule.value)
-      if (rule.value.weekOfMonth) newRule.weekOfMonth = rule.value.weekOfMonth
-      if (rule.value.weekdayOfMonth) newRule.weekdayOfMonth = rule.value.weekdayOfMonth
-    }
-    if (mode === "yearly") {
-      newRule.yearlySubMode = rule.value.yearlySubMode ?? "date"
-      newRule.monthOfYear = rule.value.monthOfYear ?? 1
-      newRule.daysOfMonth = getDaysOfMonth(rule.value)
-      if (rule.value.solarTerm) newRule.solarTerm = rule.value.solarTerm
-      if (rule.value.weekOfMonth) newRule.weekOfMonth = rule.value.weekOfMonth
-      if (rule.value.weekdayOfMonth) newRule.weekdayOfMonth = rule.value.weekdayOfMonth
-      if (rule.value.nthWorkdayOfYear) newRule.nthWorkdayOfYear = rule.value.nthWorkdayOfYear
-    }
-    if (mode === "lunar_yearly") {
-      newRule.lunarMonth = rule.value.lunarMonth ?? 1
-      newRule.lunarDay = rule.value.lunarDay ?? 1
-    }
-    if (mode === "once") {
-      newRule.anchorDate = rule.value.anchorDate ?? new Date().toISOString().slice(0, 10)
-    }
-    rule.setValue(newRule)
-    dismiss() // 选完自动返回上一级
+    dismiss({ selectedMode: mode })
   }
 
   return (
-    <List navigationTitle="选择重复模式" navigationBarTitleDisplayMode="inline">
-      <Section>
-        {REPEAT_MODES.map((m) => {
-          const selected = m.value === rule.value.mode
-          return (
-            <Button
-              key={m.value}
-              action={() => selectMode(m.value)}
-            >
-              <HStack alignment="center">
-                <Text foregroundStyle={selected ? "systemBlue" : "label"}>{m.label}</Text>
-                <Spacer />
-                {selected ? <Text foregroundStyle="systemBlue">✓</Text> : null}
-              </HStack>
-            </Button>
-          )
-        })}
-      </Section>
-    </List>
+    <NavigationStack>
+      <List navigationTitle="选择重复模式" navigationBarTitleDisplayMode="inline">
+        <Section>
+          {REPEAT_MODES.map((m) => {
+            const selected = m.value === currentMode
+            return (
+              <Button
+                key={m.value}
+                action={() => selectMode(m.value)}
+              >
+                <HStack alignment="center">
+                  <Text foregroundStyle={selected ? "systemBlue" : "label"}>{m.label}</Text>
+                  <Spacer />
+                  {selected ? <Text foregroundStyle="systemBlue">✓</Text> : null}
+                </HStack>
+              </Button>
+            )
+          })}
+        </Section>
+      </List>
+    </NavigationStack>
   )
 }
