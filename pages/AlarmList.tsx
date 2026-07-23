@@ -1,5 +1,5 @@
 // AlarmList.tsx - 闹钟列表页
-import { useState, useObservable, NavigationStack, List, Section, Text, Button, ContentUnavailableView, VStack, HStack, Navigation, ForEach, useEffect } from "scripting"
+import { useState, useObservable, NavigationStack, List, Section, Text, Button, Menu, ContentUnavailableView, VStack, HStack, Navigation, ForEach, useEffect } from "scripting"
 import { AlarmItem, AlarmSortKey } from "../lib/constants"
 import { loadAlarms, saveAlarms, updateAlarm, confirmReminder, unconfirmAllReminders, isReminderConfirmed, getUnconfirmedTimes, makeConfirmKey, loadSettings, saveSettings, loadGroups } from "../lib/alarm-store"
 import { getNextAlarmFromList, formatCountdown, formatRepeatDescription, getNextTrigger } from "../lib/scheduler"
@@ -124,7 +124,6 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
 
   // 排序对话框状态
   const editMode = useObservable(() => EditMode.inactive())
-  const sortShown = useObservable<boolean>(() => false)
 
   // 执行排序切换（维度）
   const applySort = (key: AlarmSortKey) => {
@@ -365,7 +364,11 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
           topBarTrailing: (
             <HStack spacing={0}>
               <Button title="" systemImage={hasActiveFilter(filterState.value) ? "line.horizontal.3.decrease.circle.fill" : "line.horizontal.3.decrease.circle"} action={presentFilter} />
-              <Button title="" systemImage="arrow.up.arrow.down" action={() => sortShown.setValue(true)} />
+              <Menu title="" systemImage="arrow.up.arrow.down">
+                {ALARM_SORT_OPTIONS.map(o =>
+                  <Button key={o.key} title={o.key === currentSort.value ? `✓ ${o.label}` : o.label} action={() => applySort(o.key)} />
+                )}
+              </Menu>
               <Button title="" systemImage={sortAsc.value ? "chevron.up" : "chevron.down"} action={toggleSortDir} />
               <Button title="" systemImage="gearshape" action={presentSettings} />
             </HStack>
@@ -377,13 +380,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
           isPresented: toastShown,
           onChanged: setToastShown,
         }}
-        confirmationDialog={{
-          title: "排序方式",
-          isPresented: sortShown,
-          actions: <>{ALARM_SORT_OPTIONS.map(o =>
-            <Button key={o.key} title={o.key === currentSort.value ? `✓ ${o.label}` : o.label} action={() => applySort(o.key)} />
-          )}</>,
-        }}
+
       >
         <Section>
           <NextAlarmCard alarms={loadAlarms().filter(a => a.source !== "credit_card")} />
