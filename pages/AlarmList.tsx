@@ -1,7 +1,7 @@
 // AlarmList.tsx - 闹钟列表页
 import { useState, useObservable, NavigationStack, List, Section, Text, Button, ContentUnavailableView, VStack, HStack, Navigation, ForEach, useEffect } from "scripting"
 import { AlarmItem, AlarmSortKey } from "../lib/constants"
-import { loadAlarms, saveAlarms, updateAlarm, confirmReminder, unconfirmAllReminders, isReminderConfirmed, getUnconfirmedTimes, makeConfirmKey, loadSettings, saveSettings } from "../lib/alarm-store"
+import { loadAlarms, saveAlarms, updateAlarm, confirmReminder, unconfirmAllReminders, isReminderConfirmed, getUnconfirmedTimes, makeConfirmKey, loadSettings, saveSettings, loadGroups } from "../lib/alarm-store"
 import { getNextAlarmFromList, formatCountdown, formatRepeatDescription, getNextTrigger } from "../lib/scheduler"
 import { scheduleAlarm, cancelAlarm, cancelAllAlarms, cancelRetryAlarms, ScheduleResult } from "../lib/alarm-bridge"
 import { sortAlarms, ALARM_SORT_OPTIONS, alarmSortTitle } from "../lib/sort"
@@ -38,6 +38,15 @@ function disableExpiredAlarms(): boolean {
 const loadSortedUserAlarms = (sortBy: AlarmSortKey, ascending: boolean): AlarmItem[] => {
   disableExpiredAlarms()
   return sortAlarms(loadAlarms().filter((a) => a.source !== "credit_card"), sortBy, ascending)
+}
+
+/** 构建分类名→颜色映射 */
+const buildGroupColorMap = (): Record<string, string> => {
+  const map: Record<string, string> = {}
+  for (const g of loadGroups()) {
+    map[g.name] = g.tintColor
+  }
+  return map
 }
 
 function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
@@ -88,6 +97,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
   const currentSort = useObservable<AlarmSortKey>(() => loadSettings().alarmSortBy ?? "time")
   const sortAsc = useObservable<boolean>(() => loadSettings().alarmSortAsc ?? true)
   const alarms = useObservable<AlarmItem[]>(() => loadSortedUserAlarms(currentSort.value, sortAsc.value))
+  const groupColorMap = useObservable<Record<string, string>>(() => buildGroupColorMap())
   // toast 状态
   const [toastMsg, setToastMsg] = useState("")
   const [toastShown, setToastShown] = useState(false)
@@ -132,6 +142,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
   useEffect(() => {
     if (selection.value === 1) {
       alarms.setValue(loadSortedUserAlarms(currentSort.value, sortAsc.value))
+      groupColorMap.setValue(buildGroupColorMap())
     }
   }, [selection.value])
 
@@ -331,6 +342,7 @@ export function AlarmList({ selection }: { selection: Observable<number> }) {
               <AlarmRow
                 key={alarm.id}
                 alarm={alarm}
+                groupTintColor={groupColorMap.value[alarm.groupName]}
                 onToggle={handleToggle}
                 onEdit={handleEdit}
                 onConfirm={handleConfirm}

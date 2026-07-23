@@ -75,7 +75,7 @@ export interface RepeatRule {
   anchorDate?: string
   /** 结束日期（ISO date string，如 "2026-12-31"），该日期当天仍触发，之后不再触发 */
   endDate?: string
-  /** N个周期后停止（从 anchorDate 起算）。daily=N个interval天 / weekly=N个interval周 / monthly=N个interval月 / yearly=N年 / lunar_yearly=N年 / workday=N个工作日 */
+  /** 剩余期数（从 anchorDate 起算已过的周期数会折叠扣减）。daily=剩余N个interval天 / weekly=剩余N个interval周 / monthly=剩余N个interval月 / yearly=剩余N年 / lunar_yearly=剩余N年 / workday=剩余N个工作日 */
   endAfterOccurrences?: number
 }
 
@@ -86,8 +86,9 @@ export function getDaysOfMonth(rule: RepeatRule): number[] {
   return [1]
 }
 
-/** 把旧 RepeatRule（holidayAware: boolean / dayOfMonth:number）迁移到新字段 */
-export function normalizeRule(rule: RepeatRule): RepeatRule {
+/** 把旧 RepeatRule（holidayAware: boolean / dayOfMonth:number）迁移到新字段
+ *  createdAt 用于旧数据迁移：有 endAfterOccurrences 无 anchorDate → anchorDate=createdAt */
+export function normalizeRule(rule: RepeatRule, createdAt?: number): RepeatRule {
   const r = rule as any
   // 兼容旧字段：如果 holidayAction 缺失但有 holidayAware，做迁移
   if (r.holidayAction === undefined) {
@@ -97,6 +98,10 @@ export function normalizeRule(rule: RepeatRule): RepeatRule {
   // 兼容旧字段：如果有 dayOfMonth 但没有 daysOfMonth，自动迁移
   if (r.dayOfMonth != null && (!r.daysOfMonth || r.daysOfMonth.length === 0)) {
     r.daysOfMonth = [r.dayOfMonth]
+  }
+  // 旧数据迁移：有 endAfterOccurrences 无 anchorDate → 用 createdAt 补 anchorDate
+  if (r.endAfterOccurrences && !r.anchorDate && createdAt) {
+    r.anchorDate = new Date(createdAt).toISOString().slice(0, 10)
   }
   return r as RepeatRule
 }

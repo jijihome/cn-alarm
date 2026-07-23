@@ -28,13 +28,17 @@ function isPastEndDate(repeat: RepeatRule, candidate: Date): boolean {
   return candidate.getTime() > endDate.getTime()
 }
 
-/** 计算从 anchorDate 到 now 已过的周期数（用于 endAfterOccurrences 判断） */
-function getElapsedOccurrences(repeat: RepeatRule, now: Date): number {
+/** 计算从 anchorDate 到 now 已过的周期数（用于 endAfterOccurrences 判断）
+ *  anchorDate 缺失时用 createdAt 兜底（旧数据兼容） */
+export function getElapsedOccurrences(repeat: RepeatRule, now: Date, createdAt?: number): number {
   const endN = repeat.endAfterOccurrences
   if (!endN || endN <= 0) return 0
 
-  // anchorDate 是必需的基准点，缺失时用 30 天前作为兜底
-  const anchorStr = repeat.anchorDate
+  // anchorDate 缺失时用 createdAt 兜底
+  let anchorStr = repeat.anchorDate
+  if (!anchorStr && createdAt) {
+    anchorStr = new Date(createdAt).toISOString().slice(0, 10)
+  }
   if (!anchorStr) return 0
   const anchor = new Date(anchorStr)
   if (now <= anchor) return 0
@@ -80,10 +84,10 @@ function getElapsedOccurrences(repeat: RepeatRule, now: Date): number {
 }
 
 /** 判断是否已达到 endAfterOccurrences 限制 */
-function hasReachedOccurrenceLimit(repeat: RepeatRule, now: Date): boolean {
+function hasReachedOccurrenceLimit(repeat: RepeatRule, now: Date, createdAt?: number): boolean {
   const endN = repeat.endAfterOccurrences
   if (!endN || endN <= 0) return false
-  return getElapsedOccurrences(repeat, now) >= endN
+  return getElapsedOccurrences(repeat, now, createdAt) >= endN
 }
 
 // ==================== 辅助：defer 顺延 ====================
@@ -103,7 +107,7 @@ export function getNextTrigger(alarm: AlarmItem, now: Date): Date | null {
   if (!alarm.enabled) return null
 
   // 结束条件判断：endAfterOccurrences
-  if (hasReachedOccurrenceLimit(alarm.repeat, now)) return null
+  if (hasReachedOccurrenceLimit(alarm.repeat, now, alarm.createdAt)) return null
 
   const result = (() => {
     switch (alarm.repeat.mode) {
@@ -577,23 +581,23 @@ function endConditionSuffix(repeat: RepeatRule): string {
     const interval = repeat.interval || 1
     switch (repeat.mode) {
       case "daily":
-        parts.push(interval === 1 ? `共${n}天` : `共${n}个周期`)
+        parts.push(interval === 1 ? `剩余${n}天` : `剩余${n}个周期`)
         break
       case "weekly":
-        parts.push(interval === 1 ? `共${n}周` : `共${n}个周期`)
+        parts.push(interval === 1 ? `剩余${n}周` : `剩余${n}个周期`)
         break
       case "monthly":
-        parts.push(interval === 1 ? `共${n}个月` : `共${n}个周期`)
+        parts.push(interval === 1 ? `剩余${n}个月` : `剩余${n}个周期`)
         break
       case "yearly":
       case "lunar_yearly":
-        parts.push(`共${n}年`)
+        parts.push(`剩余${n}年`)
         break
       case "workday":
-        parts.push(interval === 1 ? `共${n}个工作日` : `共${n}个周期`)
+        parts.push(interval === 1 ? `剩余${n}个工作日` : `剩余${n}个周期`)
         break
       default:
-        parts.push(`共${n}个周期`)
+        parts.push(`剩余${n}个周期`)
     }
   }
   return parts.length > 0 ? "（" + parts.join("，") + "）" : ""

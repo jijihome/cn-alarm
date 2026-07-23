@@ -7,6 +7,7 @@ import { isReminderConfirmed, getUnconfirmedTimes } from "../lib/alarm-store"
 
 interface AlarmRowProps {
   alarm: AlarmItem
+  groupTintColor?: string
   onToggle: (id: string, enabled: boolean) => void
   onEdit: (id: string) => void
   onConfirm?: (alarm: AlarmItem) => void
@@ -24,7 +25,7 @@ const MODE_ICONS: Record<RepeatMode, string> = {
   workday: "building.2.fill",
 }
 
-export function AlarmRow({ alarm, onToggle, onEdit, onConfirm, onUnconfirm }: AlarmRowProps) {
+export function AlarmRow({ alarm, groupTintColor, onToggle, onEdit, onConfirm, onUnconfirm }: AlarmRowProps) {
   const [loading, setLoading] = useState(false)
 
   const timeStr = `${String(alarm.hour).padStart(2, "0")}:${String(alarm.minute).padStart(2, "0")}`
@@ -79,7 +80,11 @@ export function AlarmRow({ alarm, onToggle, onEdit, onConfirm, onUnconfirm }: Al
             <Text font={16} foregroundStyle="secondaryLabel">{alarm.title}</Text>
           </HStack>
         </HStack>
-        {(alarm.tag || alarm.note) ? <HStack spacing={4}><Text font={15} foregroundStyle="secondaryLabel">{[alarm.tag, alarm.note].filter(Boolean).join(" · ")}</Text></HStack> : null}
+                {(alarm.groupName || alarm.tag || alarm.note) ? <HStack spacing={4}>
+          {alarm.groupName ? <Text font={15} foregroundStyle={(groupTintColor || "systemBlue") as any}>{alarm.groupName}</Text> : null}
+          {(alarm.groupName && (alarm.tag || alarm.note)) ? <Text font={15} foregroundStyle="secondaryLabel">·</Text> : null}
+          {(alarm.tag || alarm.note) ? <Text font={15} foregroundStyle={(alarm.tintColor || "systemBlue") as any}>{[alarm.tag, alarm.note].filter(Boolean).join(" · ")}</Text> : null}
+        </HStack> : null}
           <Text font={14} foregroundStyle="secondaryLabel">{desc}</Text>
           {(alarm.reminderTimes && alarm.reminderTimes.length > 0) && (
             <Text font={14} foregroundStyle="secondaryLabel">{timePointsStr}</Text>

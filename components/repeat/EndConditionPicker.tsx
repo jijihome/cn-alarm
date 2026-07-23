@@ -108,7 +108,7 @@ export function EndConditionPicker({ rule }: EndConditionPickerProps) {
           <HStack alignment="center">
             <Text>周期数</Text>
             <Spacer />
-            <Text foregroundStyle="secondaryLabel">共{occurrences.value}{unit}</Text>
+            <Text foregroundStyle="secondaryLabel">剩余{occurrences.value}{unit}</Text>
           </HStack>
         </Stepper>
       )}

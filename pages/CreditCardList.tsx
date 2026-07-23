@@ -70,7 +70,7 @@ function CardRow({ card, onEdit, onToggle, onConfirm, onUnconfirm }: { card: Cre
       >
         <HStack alignment="center" spacing={8}>
           <Text font={14} foregroundStyle={card.tintColor as any}>●</Text>
-          <Text font={20} fontWeight="bold">{card.bankName}</Text>
+          <Text font={20} fontWeight="bold" foregroundStyle={(card.tintColor || "systemBlue") as any}>{card.bankName}</Text>
           <Text font={16} foregroundStyle="label">尾号{card.last4Digits}</Text>
         </HStack>
         <HStack spacing={12}>

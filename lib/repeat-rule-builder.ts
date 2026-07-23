@@ -32,6 +32,9 @@ export function buildRepeatRule(newMode: RepeatMode, oldRule: RepeatRule): Repea
   }
   if (newMode === "once") {
     newRule.anchorDate = oldRule.anchorDate ?? new Date().toISOString().slice(0, 10)
+  } else {
+    // 非 once 模式：切换模式=重新开始，anchorDate 设为今天
+    newRule.anchorDate = new Date().toISOString().slice(0, 10)
   }
   return newRule
 }

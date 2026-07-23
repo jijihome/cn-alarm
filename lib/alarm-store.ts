@@ -1,6 +1,6 @@
 // alarm-store.ts - 闹钟数据 CRUD + Storage 操作
 import { STORAGE_KEYS, DEFAULT_GROUPS, DEFAULT_SETTINGS, DEFAULT_HOLIDAYS, AlarmItem, AlarmGroup, AppSettings, normalizeRule } from "./constants"
-import { isAlarmToday } from "./scheduler"
+import { isAlarmToday, getElapsedOccurrences } from "./scheduler"
 
 // ==================== Storage 共享选项 ====================
 const SHARED = { shared: true }
@@ -19,7 +19,7 @@ export function loadAlarms(): AlarmItem[] {
   const data = Storage.get<AlarmItem[]>(STORAGE_KEYS.ITEMS, SHARED)
   if (!data) return []
   // 迁移旧 holidayAware → holidayAction
-  return data.map((a) => ({ ...a, repeat: normalizeRule(a.repeat) }))
+  return data.map((a) => ({ ...a, repeat: normalizeRule(a.repeat, a.createdAt) }))
 }
 
 export function saveAlarms(items: AlarmItem[]): void {
@@ -27,6 +27,10 @@ export function saveAlarms(items: AlarmItem[]): void {
 }
 
 export function addAlarm(alarm: AlarmItem): void {
+  // 确保 anchorDate 存在（非 once 模式也需要，用于 endAfterOccurrences 计算）
+  if (!alarm.repeat.anchorDate && alarm.repeat.mode !== "once" && alarm.repeat.endAfterOccurrences) {
+    alarm.repeat.anchorDate = new Date().toISOString().slice(0, 10)
+  }
   const items = loadAlarms()
   items.push(alarm)
   saveAlarms(items)
@@ -36,6 +40,18 @@ export function updateAlarm(id: string, updates: Partial<AlarmItem>): AlarmItem 
   const items = loadAlarms()
   const idx = items.findIndex((a) => a.id === id)
   if (idx === -1) return null
+
+  // 保存时折叠：有 endAfterOccurrences 时，算已过周期数→扣减为剩余→重置 anchorDate
+  if (updates.repeat && updates.repeat.endAfterOccurrences && updates.repeat.endAfterOccurrences > 0) {
+    const oldAlarm = items[idx]
+    const now = new Date()
+    const elapsed = getElapsedOccurrences(updates.repeat, now, oldAlarm.createdAt)
+    const remaining = Math.max(0, updates.repeat.endAfterOccurrences - elapsed)
+    updates.repeat.endAfterOccurrences = remaining
+    const today = now.toISOString().slice(0, 10)
+    updates.repeat.anchorDate = today
+  }
+
   items[idx] = { ...items[idx], ...updates, updatedAt: Date.now() }
   saveAlarms(items)
   return items[idx]
