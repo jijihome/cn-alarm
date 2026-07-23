@@ -1,6 +1,7 @@
 // alarm-bridge.ts - Shell.run 桥接 ios-alarm skill
 import { SKILL_DIR, AlarmItem, RetryConfig } from "./constants"
 import { scheduleNotification, cancelNotification } from "./notification-bridge"
+import { getNextTrigger } from "./scheduler"
 
 // ==================== 通用桥接函数 ====================
 async function runScript(scriptName: string, params: Record<string, any>): Promise<any> {
@@ -36,6 +37,21 @@ export interface ScheduleResult {
 }
 
 export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Promise<ScheduleResult | null> {
+  // 非 weekly 模式且未传 specificDate 时，用调度引擎算下次触发日期
+  // 否则会掉进 scheduleSingleAlarm 的 else 分支变成 relative（每天重复响）
+  if (!specificDate && alarm.repeat.mode !== "weekly") {
+    // 调用方可能传入 enabled=false 的 alarm（toggle 场景：先 updateAlarm 再用旧对象调 scheduleAlarm）
+    // 强制当 enabled=true 来算下次触发日期，因为调用方已决定要调度
+    const alarmForCalc = { ...alarm, enabled: true }
+    const next = getNextTrigger(alarmForCalc, new Date())
+    if (next) {
+      specificDate = next
+    } else {
+      // 调度引擎返回 null（已过期/达到次数上限），不调度
+      return null
+    }
+  }
+
   const mainType = alarm.mainType ?? "alarm"
   let mainAlarmId: string | null = null
   const allAlarmIds: string[] = []

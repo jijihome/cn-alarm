@@ -1,8 +1,8 @@
 // DayOfMonthPicker.tsx - 月内日期多选器（日历网格页面）
-// iOS 日历风格：圆形选中标记、今天蓝圈、节假日/补班/周末颜色区分
+// List+Section 风格，日历网格每行一个 HStack（独立 List 行），避免 Button 与 List 行选择冲突
 // 根据系统地区自动判断周起始日（中国等亚洲地区=周一开始）
 // 作为 NavigationLink destination push 进入的独立页面
-import { ScrollView, VStack, HStack, Button, Text, Spacer, Circle, ZStack, RoundedRectangle, useObservable, Navigation } from "scripting"
+import { List, Section, HStack, Button, Text, Circle, ZStack, useObservable } from "scripting"
 import { isHoliday, isWorkday, loadHolidays } from "../lib/holiday"
 import { HolidayCalendar } from "../lib/constants"
 
@@ -20,28 +20,20 @@ interface DayOfMonthPickerProps {
 }
 
 export function DayOfMonthPicker({ value, onChanged }: DayOfMonthPickerProps) {
-  const dismiss = Navigation.useDismiss()
-  // 本地暂存选择状态，确定时才写回
+  // 本地暂存选择状态，实时同步到父组件
   const localDays = useObservable(value)
 
   const toggleDay = (day: number) => {
     const current = localDays.value
+    let next: number[]
     if (current.includes(day)) {
-      if (current.length > 1) {
-        localDays.setValue(current.filter((d) => d !== day).sort((a, b) => a - b))
-      }
+      if (current.length <= 1) return
+      next = current.filter((d) => d !== day).sort((a, b) => a - b)
     } else {
-      localDays.setValue([...current, day].sort((a, b) => a - b))
+      next = [...current, day].sort((a, b) => a - b)
     }
-  }
-
-  const handleReset = () => {
-    localDays.setValue(value)
-  }
-
-  const handleConfirm = () => {
-    onChanged(localDays.value)
-    dismiss()
+    localDays.setValue(next)
+    onChanged(next)
   }
 
   const now = new Date()
@@ -79,19 +71,27 @@ export function DayOfMonthPicker({ value, onChanged }: DayOfMonthPickerProps) {
   const cellSize = 44
   const circleSize = 36
 
+  // 图例 footer
+  const legendText = "🔴 节假日  🟠 补班  ⚪ 周末  🔵 今天"
+
   return (
-    <ScrollView navigationTitle={monthLabel} navigationBarTitleDisplayMode="inline">
-      <VStack alignment="center" spacing={6} padding={{ top: 12, bottom: 20, leading: 8, trailing: 8 }}>
-        <HStack spacing={2}>
+    <List navigationTitle={monthLabel} navigationBarTitleDisplayMode="inline" buttonStyle="plain">
+      <Section
+        header={<Text>选择日期</Text>}
+        footer={<Text font="footnote" foregroundStyle="systemGray">{legendText}</Text>}
+      >
+        {/* 星期标题行 */}
+        <HStack spacing={2} listRowSeparator="hidden" listRowInsets={{ top: 8, bottom: 2, leading: 0, trailing: 0 }}>
           {WEEKDAY_HEADERS.map((h) => (
             <Text key={h} font="caption2" foregroundStyle="tertiaryLabel" frame={{ width: cellSize, height: 18 }}>{h}</Text>
           ))}
         </HStack>
+        {/* 日期行：每行一个 HStack，作为独立的 List 行 */}
         {rows.map((row, rowIdx) => (
-          <HStack key={rowIdx} spacing={2}>
+          <HStack key={rowIdx} spacing={2} listRowInsets={{ top: 1, bottom: 1, leading: 0, trailing: 0 }}>
             {row.map((day, colIdx) => {
               if (day == null) {
-                return <VStack key={`empty${colIdx}`} frame={{ width: cellSize, height: cellSize }} />
+                return <ZStack key={`empty${colIdx}`} frame={{ width: cellSize, height: cellSize }} />
               }
               const selected = localDays.value.includes(day)
               const isToday = day === today
@@ -121,46 +121,10 @@ export function DayOfMonthPicker({ value, onChanged }: DayOfMonthPickerProps) {
             })}
           </HStack>
         ))}
-        <Spacer />
-        {/* 图例卡片 */}
-        <VStack spacing={6} padding={{ top: 8, bottom: 8, leading: 12, trailing: 12 }} frame={{ maxWidth: 340 }} background={<RoundedRectangle fill={"systemGray6" as any} cornerRadius={10} />}>
-          <HStack spacing={12}>
-            <HStack spacing={3}>
-              <Circle fill={"systemRed" as any} frame={{ width: 8, height: 8 }} />
-              <Text font="caption2" foregroundStyle="secondaryLabel">节假日</Text>
-            </HStack>
-            <HStack spacing={3}>
-              <Circle fill={"systemOrange" as any} frame={{ width: 8, height: 8 }} />
-              <Text font="caption2" foregroundStyle="secondaryLabel">补班</Text>
-            </HStack>
-            <HStack spacing={3}>
-              <Circle fill={"tertiaryLabel" as any} frame={{ width: 8, height: 8 }} />
-              <Text font="caption2" foregroundStyle="secondaryLabel">周末</Text>
-            </HStack>
-            <HStack spacing={3}>
-              <Circle stroke={{ shapeStyle: "systemBlue" as any, strokeStyle: { lineWidth: 1.5 } }} frame={{ width: 8, height: 8 }} />
-              <Text font="caption2" foregroundStyle="secondaryLabel">今天</Text>
-            </HStack>
-          </HStack>
-        </VStack>
-        {/* 已选摘要 */}
-        <Text font="subheadline" foregroundStyle="secondaryLabel" padding={{ top: 16, bottom: 4 }}>
-          已选：{formatDaysOfMonth(localDays.value)}
-        </Text>
-        {/* 重置按钮 */}
-        <Button action={handleReset}>
-          <HStack alignment="center" padding={12} frame={{ maxWidth: 340 }} background={<RoundedRectangle fill={"systemGray6" as any} cornerRadius={10} />}>
-            <Text font="body" foregroundStyle="systemRed">重置</Text>
-          </HStack>
-        </Button>
-        {/* 确定按钮 */}
-        <Button action={handleConfirm}>
-          <HStack alignment="center" padding={12} frame={{ maxWidth: 340 }} background={<RoundedRectangle fill={"systemGray6" as any} cornerRadius={10} />}>
-            <Text font="body" foregroundStyle="systemBlue">确定</Text>
-          </HStack>
-        </Button>
-      </VStack>
-    </ScrollView>
+      </Section>
+      <Section footer={<Text font="footnote" foregroundStyle="systemGray">已选：{formatDaysOfMonth(localDays.value)}</Text>}>
+      </Section>
+    </List>
   )
 }
 
