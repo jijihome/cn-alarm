@@ -117,8 +117,25 @@ function AlarmTimeRow({ point, onConfirm, onUnconfirm }: AlarmTimeRowProps) {
       : [<Button key="unconfirm" title="取消确认" tint="systemOrange" action={() => { if (onUnconfirm) onUnconfirm(point) }} />]
   } : undefined
 
+  // 信用卡闹钟：title 格式 "银行名(尾号) 描述后缀"，拆成标题行和描述行
+  let titleLine = alarm.title
+  let titleSuffix = ""
+  if (isCreditCard && alarm.tag) {
+    const tagStr = `(${alarm.tag})`
+    const idx = alarm.title.indexOf(tagStr)
+    if (idx >= 0) {
+      const afterTag = idx + tagStr.length
+      titleLine = alarm.title.substring(0, afterTag)
+      titleSuffix = alarm.title.substring(afterTag).trim()
+    }
+  }
+
+  const descLines: string[] = []
+  if (titleSuffix) descLines.push(titleSuffix)
+  descLines.push(desc)
+
   return (
-    <VStack alignment="leading" spacing={2}
+    <VStack alignment="leading" spacing={3}
       leadingSwipeActions={leadingActions}
     >
       <HStack alignment="center" spacing={8}>
@@ -137,20 +154,20 @@ function AlarmTimeRow({ point, onConfirm, onUnconfirm }: AlarmTimeRowProps) {
         )}
         <HStack alignment="firstTextBaseline" spacing={6}>
           <Text font={20} fontWeight="bold" foregroundStyle={isUnconfirmed ? "systemOrange" : "label"}>{timeStr}</Text>
-          <Text font={15} foregroundStyle="label">{alarm.title}</Text>
+          <Text font={15} foregroundStyle="label">{titleLine}</Text>
           {isCreditCard && (
             <Text font={12} foregroundStyle="systemOrange" fontWeight="semibold">信用卡</Text>
           )}
         </HStack>
       </HStack>
-      <HStack spacing={4}>
-        <Text font={13} foregroundStyle="secondaryLabel">{desc}</Text>
-        {hasRetry && (
-          <Text font={12} foregroundStyle={confirmed ? "systemGreen" : "systemOrange"} fontWeight={isUnconfirmed ? "semibold" : "regular"}>
-            {confirmed ? "已确认" : "待确认"}
-          </Text>
-        )}
-      </HStack>
+      {descLines.map((line, i) => (
+        <Text key={i} font={13} foregroundStyle="secondaryLabel">{line}</Text>
+      ))}
+      {hasRetry && (
+        <Text font={12} foregroundStyle={confirmed ? "systemGreen" : "systemOrange"} fontWeight={isUnconfirmed ? "semibold" : "regular"}>
+          {confirmed ? "已确认" : "待确认"}
+        </Text>
+      )}
     </VStack>
   )
 }
