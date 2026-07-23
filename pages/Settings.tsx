@@ -106,7 +106,7 @@ export function Settings() {
             <Text foregroundStyle="secondaryLabel">{groupCount.value} 个分类</Text>
           </HStack>
         </Button>
-        <Text font={13} foregroundStyle="secondaryLabel">中国闹钟 v1.0.0</Text>
+        <Text font={15} foregroundStyle="secondaryLabel">中国闹钟 v1.0.0</Text>
       </Section>
     </List>
     </NavigationStack>

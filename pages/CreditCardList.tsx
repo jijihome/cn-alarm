@@ -71,24 +71,24 @@ function CardRow({ card, onEdit, onToggle, onConfirm, onUnconfirm }: { card: Cre
         <HStack alignment="center" spacing={8}>
           <Text font={14} foregroundStyle={card.tintColor as any}>●</Text>
           <Text font={20} fontWeight="bold">{card.bankName}</Text>
-          <Text font={16} foregroundStyle="secondaryLabel">尾号{card.last4Digits}</Text>
+          <Text font={16} foregroundStyle="label">尾号{card.last4Digits}</Text>
         </HStack>
         <HStack spacing={12}>
-          <Text font={13} foregroundStyle="secondaryLabel">账单日{card.statementDay}号</Text>
-          <Text font={13} foregroundStyle="secondaryLabel">免息期{card.graceDays}天</Text>
+          <Text font={15} foregroundStyle="label">账单日{card.statementDay}号</Text>
+          <Text font={15} foregroundStyle="label">免息期{card.graceDays}天</Text>
         </HStack>
         <HStack spacing={8}>
           <Text font={14} fontWeight="semibold" foregroundStyle="systemOrange">下次还款: {dueStr}</Text>
           {daysUntilDue <= 3 && daysUntilDue >= 0 && (
-            <Text font={12} foregroundStyle="systemRed">仅剩{daysUntilDue}天!</Text>
+            <Text font={14} foregroundStyle="systemRed">仅剩{daysUntilDue}天!</Text>
           )}
         </HStack>
-        <Text font={12} foregroundStyle="tertiaryLabel">{reminderSummary(card)}</Text>
+        <Text font={14} foregroundStyle="secondaryLabel">{reminderSummary(card)}</Text>
         {hasUnconfirmed && (
-          <Text font={12} foregroundStyle="systemOrange">待确认: {unconfirmedDetail}</Text>
+          <Text font={14} foregroundStyle="systemOrange">待确认: {unconfirmedDetail}</Text>
         )}
         {allConfirmed && (
-          <Text font={12} foregroundStyle="systemGreen">今日已全部确认</Text>
+          <Text font={14} foregroundStyle="systemGreen">今日已全部确认</Text>
         )}
       </VStack>
     </Toggle>

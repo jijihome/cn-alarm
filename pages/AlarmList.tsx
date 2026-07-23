@@ -74,7 +74,7 @@ function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
 
   return (
     <VStack alignment="leading" spacing={4}>
-      <Text font={13} foregroundStyle="secondaryLabel">下一个闹钟</Text>
+      <Text font={15} foregroundStyle="secondaryLabel">下一个闹钟</Text>
       <Text font={28} fontWeight="bold" foregroundStyle="label">{countdown}</Text>
       <Text font={14} foregroundStyle="secondaryLabel">
         {next.alarm.title} · {timeStr} · {formatRepeatDescription(next.alarm.repeat)}

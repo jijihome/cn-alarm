@@ -161,15 +161,15 @@ function AlarmTimeRow({ point, onConfirm, onUnconfirm }: AlarmTimeRowProps) {
           <Text font={20} fontWeight="bold" foregroundStyle={isUnconfirmed ? "systemOrange" : "label"}>{timeStr}</Text>
           <Text font={15} foregroundStyle="label">{titleLine}</Text>
           {isCreditCard && (
-            <Text font={12} foregroundStyle="systemOrange" fontWeight="semibold">信用卡</Text>
+            <Text font={14} foregroundStyle="systemOrange" fontWeight="semibold">信用卡</Text>
           )}
         </HStack>
       </HStack>
       {descLines.map((line, i) => (
-        <Text key={i} font={13} foregroundStyle="secondaryLabel">{line}</Text>
+        <Text key={i} font={15} foregroundStyle="secondaryLabel">{line}</Text>
       ))}
       {hasRetry && (
-        <Text font={12} foregroundStyle={confirmed ? "systemGreen" : "systemOrange"} fontWeight={isUnconfirmed ? "semibold" : "regular"}>
+        <Text font={14} foregroundStyle={confirmed ? "systemGreen" : "systemOrange"} fontWeight={isUnconfirmed ? "semibold" : "regular"}>
           {confirmed ? "已确认" : "待确认"}
         </Text>
       )}
@@ -255,29 +255,29 @@ export function TodayAlarms({ selection }: { selection: Observable<number> }) {
         }}
       >
         {/* 日期摘要 */}
-        <Section header={<Text font={13} foregroundStyle="secondaryLabel">{dateStr} {weekdayStr}</Text>}>
+        <Section header={<Text font={15} foregroundStyle="secondaryLabel">{dateStr} {weekdayStr}</Text>}>
           {hasAny ? (
             <VStack alignment="leading" spacing={4}>
               <HStack spacing={16}>
                 <VStack alignment="center" spacing={2}>
                   <Text font={28} fontWeight="bold" foregroundStyle="systemBlue">{pending.length}</Text>
-                  <Text font={12} foregroundStyle="systemBlue">未响铃</Text>
+                  <Text font={14} foregroundStyle="systemBlue">未响铃</Text>
                 </VStack>
                 {unconfirmed.length > 0 && (
                   <VStack alignment="center" spacing={2}>
                     <Text font={28} fontWeight="bold" foregroundStyle="systemOrange">{unconfirmed.length}</Text>
-                    <Text font={12} foregroundStyle="systemOrange">待确认</Text>
+                    <Text font={14} foregroundStyle="systemOrange">待确认</Text>
                   </VStack>
                 )}
                 {confirmed.length > 0 && (
                   <VStack alignment="center" spacing={2}>
                     <Text font={28} fontWeight="bold" foregroundStyle="systemGreen">{confirmed.length}</Text>
-                    <Text font={12} foregroundStyle="systemGreen">已确认</Text>
+                    <Text font={14} foregroundStyle="systemGreen">已确认</Text>
                   </VStack>
                 )}
                 <VStack alignment="center" spacing={2}>
                   <Text font={28} fontWeight="bold" foregroundStyle="secondaryLabel">{triggered.length}</Text>
-                  <Text font={12} foregroundStyle="secondaryLabel">已响铃</Text>
+                  <Text font={14} foregroundStyle="secondaryLabel">已响铃</Text>
                 </VStack>
               </HStack>
             </VStack>

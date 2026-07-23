@@ -107,7 +107,7 @@ function GroupEditor({ editId }: { editId?: string }) {
           {/* 名称 */}
           <VStack spacing={0} padding={0} background={cardBg}>
             <VStack spacing={4} padding={{ top: 12, leading: 16, trailing: 16 }}>
-              <Text font={13} foregroundStyle="secondaryLabel">名称</Text>
+              <Text font={15} foregroundStyle="secondaryLabel">名称</Text>
             </VStack>
             <TextField
               title="分类名"
@@ -120,7 +120,7 @@ function GroupEditor({ editId }: { editId?: string }) {
 
           {/* 颜色选择：Picker menu 弹出式菜单 */}
           <VStack spacing={4} padding={16} background={cardBg}>
-            <Text font={13} foregroundStyle="secondaryLabel">颜色</Text>
+            <Text font={15} foregroundStyle="secondaryLabel">颜色</Text>
             <Picker
               title={COLOR_OPTIONS.find(c => c.value === colorValue.value)?.label ?? "颜色"}
               value={colorValue.value}
@@ -147,7 +147,7 @@ function GroupEditor({ editId }: { editId?: string }) {
           {/* 图标网格 */}
           {isSearching ? (
             <VStack spacing={8} padding={16} background={cardBg}>
-              <Text font={13} foregroundStyle="secondaryLabel">搜索结果 ({filteredIcons.length})</Text>
+              <Text font={15} foregroundStyle="secondaryLabel">搜索结果 ({filteredIcons.length})</Text>
               {filteredIcons.length > 0 ? (
                 <VStack spacing={12}>
                   {rowsOf(filteredIcons, COLS).map((row, ri) => (
@@ -174,7 +174,7 @@ function GroupEditor({ editId }: { editId?: string }) {
           ) : (
             ICON_CATEGORIES.map((cat) => (
               <VStack key={cat.name} spacing={12} padding={16} background={cardBg}>
-                <Text font={13} foregroundStyle="secondaryLabel">{cat.name}</Text>
+                <Text font={15} foregroundStyle="secondaryLabel">{cat.name}</Text>
                 <VStack spacing={12}>
                   {rowsOf(cat.icons, COLS).map((row, ri) => (
                     <HStack key={ri} spacing={12} alignment="center">

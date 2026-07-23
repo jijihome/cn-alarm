@@ -79,18 +79,18 @@ export function AlarmRow({ alarm, onToggle, onEdit, onConfirm, onUnconfirm }: Al
             <Text font={16} foregroundStyle="secondaryLabel">{alarm.title}</Text>
           </HStack>
         </HStack>
-        {(alarm.tag || alarm.note) ? <HStack spacing={4}><Text font={13} foregroundStyle="tertiaryLabel">{[alarm.tag, alarm.note].filter(Boolean).join(" · ")}</Text></HStack> : null}
+        {(alarm.tag || alarm.note) ? <HStack spacing={4}><Text font={15} foregroundStyle="secondaryLabel">{[alarm.tag, alarm.note].filter(Boolean).join(" · ")}</Text></HStack> : null}
           <Text font={14} foregroundStyle="secondaryLabel">{desc}</Text>
           {(alarm.reminderTimes && alarm.reminderTimes.length > 0) && (
-            <Text font={12} foregroundStyle="tertiaryLabel">{timePointsStr}</Text>
+            <Text font={14} foregroundStyle="secondaryLabel">{timePointsStr}</Text>
           )}
           {hasUnconfirmed && (
-            <Text font={12} foregroundStyle="systemOrange">
+            <Text font={14} foregroundStyle="systemOrange">
               待确认: {unconfirmed.map(t => `${String(t.hour).padStart(2, "0")}:${String(t.minute).padStart(2, "0")}`).join(", ")}
             </Text>
           )}
           {allConfirmed && (
-            <Text font={12} foregroundStyle="systemGreen">今日已全部确认</Text>
+            <Text font={14} foregroundStyle="systemGreen">今日已全部确认</Text>
           )}
         </VStack>
     </Toggle>
