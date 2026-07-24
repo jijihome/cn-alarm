@@ -2,7 +2,7 @@
 import { useState, useObservable, NavigationStack, List, Section, Text, Button, Menu, ContentUnavailableView, VStack, HStack, Navigation, ForEach, useEffect } from "scripting"
 import { AlarmItem, AlarmSortKey } from "../lib/constants"
 import { loadAlarms, saveAlarms, updateAlarm, confirmReminder, unconfirmAllReminders, isReminderConfirmed, getUnconfirmedTimes, makeConfirmKey, loadSettings, saveSettings, loadGroups } from "../lib/alarm-store"
-import { getNextAlarmFromList, formatCountdown, formatRepeatDescription, getNextTrigger } from "../lib/scheduler"
+import { getNextAlarmFromList, formatCountdown, formatRepeatDescription, getNextTrigger, getNextTriggerMulti } from "../lib/scheduler"
 import { scheduleAlarm, cancelAlarm, cancelAllAlarms, cancelRetryAlarms, ScheduleResult } from "../lib/alarm-bridge"
 import { sortAlarms, ALARM_SORT_OPTIONS, alarmSortTitle } from "../lib/sort"
 import { AlarmRow } from "../components/AlarmRow"
@@ -21,7 +21,7 @@ function disableExpiredAlarms(): boolean {
   let changed = false
   const updated = allAlarms.map(a => {
     if (a.enabled) {
-      const next = getNextTrigger(a, now)
+      const next = getNextTriggerMulti(a, now)
       if (!next) {
         changed = true
         // 异步取消系统闹钟
@@ -96,7 +96,7 @@ function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
   }
 
   const countdown = formatCountdown(next.date, new Date())
-  const timeStr = `${String(next.alarm.hour).padStart(2, "0")}:${String(next.alarm.minute).padStart(2, "0")}`
+  const timeStr = `${String(next.hour).padStart(2, "0")}:${String(next.minute).padStart(2, "0")}`
 
   return (
     <VStack alignment="leading" spacing={4}>

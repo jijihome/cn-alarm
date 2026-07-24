@@ -527,16 +527,45 @@ function getNextWorkday(alarm: AlarmItem, now: Date): Date | null {
   return null
 }
 
+// ==================== 多时间点支持 ====================
+
+/** 获取闹钟所有时间点（主时间 + reminderTimes） */
+function getAllTimePoints(alarm: AlarmItem): { hour: number; minute: number }[] {
+  return [
+    { hour: alarm.hour, minute: alarm.minute },
+    ...(alarm.reminderTimes ?? []).map(t => ({ hour: t.hour, minute: t.minute })),
+  ]
+}
+
+/** 获取闹钟所有时间点中最早的下次触发（多时间点版本的 getNextTrigger）
+ *  遍历 [主时间, ...reminderTimes]，对每个时间点构造临时副本调 getNextTrigger，取最早的 */
+export function getNextTriggerMulti(alarm: AlarmItem, now: Date): Date | null {
+  if (!alarm.enabled) return null
+  let earliest: Date | null = null
+  for (const t of getAllTimePoints(alarm)) {
+    const tempAlarm = { ...alarm, hour: t.hour, minute: t.minute }
+    const trigger = getNextTrigger(tempAlarm, now)
+    if (trigger && (!earliest || trigger < earliest)) {
+      earliest = trigger
+    }
+  }
+  return earliest
+}
+
 // ==================== 获取所有启用闹钟的下一个触发 ====================
-export function getNextAlarmFromList(alarms: AlarmItem[], now: Date): { alarm: AlarmItem; date: Date } | null {
-  let earliest: { alarm: AlarmItem; date: Date } | null = null
+export function getNextAlarmFromList(alarms: AlarmItem[], now: Date): { alarm: AlarmItem; date: Date; hour: number; minute: number } | null {
+  let earliest: { alarm: AlarmItem; date: Date; hour: number; minute: number } | null = null
 
   for (const alarm of alarms) {
     if (!alarm.enabled) continue
-    const trigger = getNextTrigger(alarm, now)
-    if (!trigger) continue
-    if (!earliest || trigger < earliest.date) {
-      earliest = { alarm, date: trigger }
+    // 遍历所有时间点（主时间 + reminderTimes），找最早的触发
+    for (const t of getAllTimePoints(alarm)) {
+      const tempAlarm = { ...alarm, hour: t.hour, minute: t.minute }
+      const trigger = getNextTrigger(tempAlarm, now)
+      if (!trigger) continue
+      if (!earliest || trigger < earliest.date) {
+        earliest = { alarm, date: trigger, hour: t.hour, minute: t.minute }
+      }
     }
   }
 

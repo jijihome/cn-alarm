@@ -444,15 +444,6 @@ export function TodayAlarms({ selection }: { selection: Observable<number> }) {
           </Section>
         )}
 
-        {/* 补确认：今天确认的过期记录 */}
-        {overdueConfirmed.length > 0 && (
-          <Section header={<Text font={14} foregroundStyle="systemGreen">补确认</Text>}>
-            {overdueConfirmed.map((r, idx) => (
-              <OverdueConfirmedRow key={`oc-${r.alarm.id}-${idx}`} record={r} />
-            ))}
-          </Section>
-        )}
-
         {/* 未响铃 */}
         {pending.length > 0 && (
           <Section header={<Text font={14} foregroundStyle="systemBlue">未响铃</Text>}>
@@ -485,6 +476,15 @@ export function TodayAlarms({ selection }: { selection: Observable<number> }) {
           <Section header={<Text font={14} foregroundStyle="secondaryLabel">已响铃</Text>}>
             {triggered.map((p, idx) => (
               <AlarmTimeRow key={`t-${p.alarm.id}-${idx}`} point={p} onConfirm={handleConfirm} onUnconfirm={handleUnconfirm} />
+            ))}
+          </Section>
+        )}
+
+        {/* 补确认：今天确认的过期记录 */}
+        {overdueConfirmed.length > 0 && (
+          <Section header={<Text font={14} foregroundStyle="systemGreen">补确认</Text>}>
+            {overdueConfirmed.map((r, idx) => (
+              <OverdueConfirmedRow key={`oc-${r.alarm.id}-${idx}`} record={r} />
             ))}
           </Section>
         )}

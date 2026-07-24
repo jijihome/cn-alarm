@@ -1,7 +1,7 @@
 // sort.ts - 列表排序纯函数
 import { AlarmItem, CreditCard, AlarmSortKey, CardSortKey } from "./constants"
 import { getNextDueDate, getNextCardTrigger } from "./credit-card"
-import { getNextTrigger } from "./scheduler"
+import { getNextTriggerMulti } from "./scheduler"
 
 // ==================== 方向标记 ====================
 
@@ -40,7 +40,7 @@ export function sortAlarms(alarms: AlarmItem[], sortBy: AlarmSortKey, ascending:
       // 按下次实际触发时间排序，null（未启用/已过期）排最后
       const now = new Date()
       const getTime = (a: AlarmItem) => {
-        const t = getNextTrigger(a, now)
+        const t = getNextTriggerMulti(a, now)
         return t ? t.getTime() : Infinity // Infinity 保证 null 始终排末尾
       }
       return arr.sort((a, b) => {
