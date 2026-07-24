@@ -102,7 +102,7 @@ function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
     <VStack alignment="leading" spacing={4}>
       <Text font={20} fontWeight="bold">{next.alarm.title}</Text>
       <Text font={14} foregroundStyle="secondaryLabel">
-        {timeStr} · {next.date.getMonth() + 1}月{next.date.getDate()}日 周{"日一二三四五六"[next.date.getDay()]}
+        {timeStr} · {(next.date.getFullYear() !== new Date().getFullYear() ? next.date.getFullYear() + "年" : "") + (next.date.getMonth() + 1) + "月" + next.date.getDate() + "日 周" + "日一二三四五六"[next.date.getDay()]}
       </Text>
       <Text font={28} fontWeight="bold" foregroundStyle="label">{countdown}</Text>
       <Text font={14} foregroundStyle="secondaryLabel">{formatRepeatDescription(next.alarm.repeat)}</Text>

@@ -32,7 +32,7 @@ export function AlarmRow({ alarm, groupTintColor, onToggle, onEdit, onConfirm, o
   const desc = formatRepeatDescription(alarm.repeat)
   const nextTrigger = alarm.enabled ? getNextTriggerMulti(alarm, new Date()) : null
   const nextDateStr = nextTrigger
-    ? (nextTrigger.getMonth() + 1) + "月" + nextTrigger.getDate() + "日 周" + "日一二三四五六"[nextTrigger.getDay()]
+    ? (nextTrigger.getFullYear() !== new Date().getFullYear() ? nextTrigger.getFullYear() + "年" : "") + (nextTrigger.getMonth() + 1) + "月" + nextTrigger.getDate() + "日 周" + "日一二三四五六"[nextTrigger.getDay()]
     : null
   const nextTimeStr = nextTrigger
     ? `${String(nextTrigger.getHours()).padStart(2, "0")}:${String(nextTrigger.getMinutes()).padStart(2, "0")}`
@@ -87,11 +87,14 @@ export function AlarmRow({ alarm, groupTintColor, onToggle, onEdit, onConfirm, o
         </HStack>
         <HStack alignment="firstTextBaseline" spacing={4}>
           {nextDateStr ? <Text font={14} foregroundStyle="secondaryLabel">{nextDateStr}</Text> : null}
-          <Text font={14} fontWeight="semibold">{nextTimeStr}</Text>
+          <Text font={14} fontWeight="semibold" foregroundStyle="secondaryLabel">{nextTimeStr}</Text>
         </HStack>
-        {alarm.tag ? <Text font={15} foregroundStyle={(alarm.tintColor || "systemBlue") as any}>{alarm.tag}</Text> : null}
-          <Text font={14} foregroundStyle="secondaryLabel">{desc}</Text>
+        <Text font={14} foregroundStyle="secondaryLabel">{desc}</Text>
+        {(alarm.tag || alarm.note) ? <HStack spacing={4} alignment="firstTextBaseline">
+          {alarm.tag ? <Text font={14} foregroundStyle={(alarm.tintColor || "systemBlue") as any}>{alarm.tag}</Text> : null}
+          {(alarm.tag && alarm.note) ? <Text font={14} foregroundStyle="secondaryLabel">·</Text> : null}
           {alarm.note ? <Text font={14} foregroundStyle="secondaryLabel">{alarm.note}</Text> : null}
+        </HStack> : null}
           {(alarm.reminderTimes && alarm.reminderTimes.length > 0) && (
             <Text font={14} foregroundStyle="secondaryLabel">{timePointsStr}</Text>
           )}
