@@ -2,7 +2,7 @@
 import { useState } from "scripting"
 import { HStack, VStack, Text, Toggle, Image, Button } from "scripting"
 import { AlarmItem, RepeatMode } from "../lib/constants"
-import { formatRepeatDescription } from "../lib/scheduler"
+import { formatRepeatDescription, getNextTriggerMulti } from "../lib/scheduler"
 import { isReminderConfirmed, getUnconfirmedTimes } from "../lib/alarm-store"
 
 interface AlarmRowProps {
@@ -30,6 +30,10 @@ export function AlarmRow({ alarm, groupTintColor, onToggle, onEdit, onConfirm, o
 
   const timeStr = `${String(alarm.hour).padStart(2, "0")}:${String(alarm.minute).padStart(2, "0")}`
   const desc = formatRepeatDescription(alarm.repeat)
+  const nextTrigger = alarm.enabled ? getNextTriggerMulti(alarm, new Date()) : null
+  const nextDateStr = nextTrigger
+    ? (nextTrigger.getMonth() + 1) + "月" + nextTrigger.getDate() + "日 周" + "日一二三四五六"[nextTrigger.getDay()]
+    : null
 
   // 今天未确认的时间点
   const today = new Date()
@@ -85,7 +89,7 @@ export function AlarmRow({ alarm, groupTintColor, onToggle, onEdit, onConfirm, o
           {(alarm.groupName && (alarm.tag || alarm.note)) ? <Text font={15} foregroundStyle="secondaryLabel">·</Text> : null}
           {(alarm.tag || alarm.note) ? <Text font={15} foregroundStyle={(alarm.tintColor || "systemBlue") as any}>{[alarm.tag, alarm.note].filter(Boolean).join(" · ")}</Text> : null}
         </HStack> : null}
-          <Text font={14} foregroundStyle="secondaryLabel">{desc}</Text>
+          <Text font={14} foregroundStyle="secondaryLabel">{desc}{nextDateStr ? ` · ${nextDateStr}` : ""}</Text>
           {(alarm.reminderTimes && alarm.reminderTimes.length > 0) && (
             <Text font={14} foregroundStyle="secondaryLabel">{timePointsStr}</Text>
           )}

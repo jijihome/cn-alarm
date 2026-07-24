@@ -103,7 +103,7 @@ function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
       <Text font={15} foregroundStyle="secondaryLabel">下一个闹钟</Text>
       <Text font={28} fontWeight="bold" foregroundStyle="label">{countdown}</Text>
       <Text font={14} foregroundStyle="secondaryLabel">
-        {next.alarm.title} · {timeStr} · {formatRepeatDescription(next.alarm.repeat)}
+        {next.alarm.title} · {timeStr} · {next.date.getMonth() + 1}月{next.date.getDate()}日 周{"日一二三四五六"[next.date.getDay()]} · {formatRepeatDescription(next.alarm.repeat)}
       </Text>
     </VStack>
   )
