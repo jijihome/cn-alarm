@@ -285,3 +285,116 @@ export function unconfirmAllReminders(alarmId: string, date: Date): void {
   alarm.updatedAt = Date.now()
   saveAlarms(items)
 }
+
+// ==================== 过期未确认扫描 ====================
+
+/** 过期未确认记录 */
+export interface OverdueUnconfirmedRecord {
+  alarm: AlarmItem
+  date: Date           // 触发日期（过去）
+  hour: number
+  minute: number
+  source: "user" | "credit_card"
+  /** 天数差：距今几天前 */
+  daysAgo: number
+}
+
+/** 扫描最近 N 天内触发但未被确认的提醒记录（仅 retryConfig 启用的闹钟）。
+ *  跳过今天（今天在今日视图主体显示），只扫过去日期。 */
+export function getOverdueUnconfirmed(days: number = 7): OverdueUnconfirmedRecord[] {
+  const today = new Date()
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const allAlarms = loadAlarms()
+  const records: OverdueUnconfirmedRecord[] = []
+
+  for (const alarm of allAlarms) {
+    if (!alarm.enabled || !alarm.retryConfig?.enabled) continue
+
+    // 所有时间点（主 + 额外）
+    const times = [
+      { hour: alarm.hour, minute: alarm.minute },
+      ...(alarm.reminderTimes ?? [])
+    ]
+
+    for (let d = 1; d <= days; d++) {
+      const checkDate = new Date(todayStart)
+      checkDate.setDate(checkDate.getDate() - d)
+
+      if (!isAlarmToday(alarm, checkDate)) continue
+
+      for (const t of times) {
+        const key = makeConfirmKey(checkDate, t.hour, t.minute)
+        const isConfirmed = !!(alarm.confirmedReminders && alarm.confirmedReminders[key])
+        if (!isConfirmed) {
+          const source: "user" | "credit_card" = alarm.source === "credit_card" ? "credit_card" : "user"
+          records.push({ alarm, date: new Date(checkDate), hour: t.hour, minute: t.minute, source, daysAgo: d })
+        }
+      }
+    }
+  }
+
+  // 按日期+时间排序（最近的在前）
+  records.sort((a, b) => {
+    const dateCmp = b.date.getTime() - a.date.getTime()
+    if (dateCmp !== 0) return dateCmp
+    return (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute)
+  })
+
+  return records
+}
+
+/** 确认一条过期未确认记录：标记已确认 + 取消重试闹钟 */
+export function confirmOverdueRecord(record: OverdueUnconfirmedRecord): void {
+  confirmReminder(record.alarm.id, record.date, record.hour, record.minute)
+}
+
+/** 过期已确认记录（今天补确认的过期提醒） */
+export interface OverdueConfirmedRecord {
+  alarm: AlarmItem
+  date: Date           // 触发日期（过去）
+  hour: number
+  minute: number
+  source: "user" | "credit_card"
+  daysAgo: number
+  /** 确认时间戳 */
+  confirmedAt: number
+}
+
+/** 扫描今天确认的过期记录（确认时间戳在今天）。
+ *  confirmedReminders key 是过去日期但 value（时间戳）落在今天。 */
+export function getOverdueConfirmedToday(days: number = 7): OverdueConfirmedRecord[] {
+  const today = new Date()
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const todayEnd = todayStart.getTime() + 24 * 60 * 60 * 1000
+  const allAlarms = loadAlarms()
+  const records: OverdueConfirmedRecord[] = []
+
+  for (const alarm of allAlarms) {
+    if (!alarm.enabled || !alarm.retryConfig?.enabled) continue
+    if (!alarm.confirmedReminders) continue
+
+    const times = [
+      { hour: alarm.hour, minute: alarm.minute },
+      ...(alarm.reminderTimes ?? [])
+    ]
+
+    for (let d = 1; d <= days; d++) {
+      const checkDate = new Date(todayStart)
+      checkDate.setDate(checkDate.getDate() - d)
+      if (!isAlarmToday(alarm, checkDate)) continue
+
+      for (const t of times) {
+        const key = makeConfirmKey(checkDate, t.hour, t.minute)
+        const ts = alarm.confirmedReminders[key]
+        if (ts && ts >= todayStart.getTime() && ts < todayEnd) {
+          const source: "user" | "credit_card" = alarm.source === "credit_card" ? "credit_card" : "user"
+          records.push({ alarm, date: new Date(checkDate), hour: t.hour, minute: t.minute, source, daysAgo: d, confirmedAt: ts })
+        }
+      }
+    }
+  }
+
+  // 按确认时间倒序（最近补确认的在前）
+  records.sort((a, b) => b.confirmedAt - a.confirmedAt)
+  return records
+}

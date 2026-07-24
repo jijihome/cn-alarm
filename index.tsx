@@ -5,6 +5,7 @@ import { AlarmList } from "./pages/AlarmList"
 import { CreditCardList } from "./pages/CreditCardList"
 import { SearchView } from "./pages/SearchView"
 import { initializeDefaults, loadSettings } from "./lib/alarm-store"
+import { syncOnColdStart, syncOnResume } from "./lib/alarm-sync"
 
 function RootView() {
   // Tab 选择状态——各页面订阅它，切回来时重新加载数据
@@ -47,9 +48,11 @@ Script.onMinimize(() => {
   }
 })
 
-// app 回前台时，释放保活请求（队列里可能还有其他脚本，真正停止取决于队列是否空）
+// app 回前台时：释放保活请求 + 一致性检查（带 5 分钟节流）
 Script.onResume(() => {
   BackgroundKeeper.stopKeepAlive()
+  // fire-and-forget：检查 Storage 闹钟是否在系统中存在，丢失的自动重新调度
+  syncOnResume().catch(() => {})
 })
 
 async function run() {
@@ -57,6 +60,12 @@ async function run() {
   initializeDefaults()
 
   await Navigation.present(<RootView />)
+
+  // UI 已呈现后，异步检查 Storage 闹钟与系统 AlarmManager 的一致性
+  // 发现 enabled=true 但 alarmIds 在系统中不存在的闹钟 → 自动重新调度
+  // fire-and-forget：不阻塞 UI，下次 reload 会反映修复结果
+  syncOnColdStart().catch(() => {})
+
   Script.exit()
 }
 

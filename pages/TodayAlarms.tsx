@@ -1,7 +1,7 @@
 // TodayAlarms.tsx - 今日闹铃页面：显示今日所有闹铃，分待确认/已响铃/未响铃
 import { useState, useObservable, NavigationStack, List, Section, Text, HStack, VStack, Image, ContentUnavailableView, Button, useEffect, Navigation } from "scripting"
 import { AlarmItem } from "../lib/constants"
-import { loadAlarms, isReminderConfirmed, confirmReminder, unconfirmAllReminders } from "../lib/alarm-store"
+import { loadAlarms, isReminderConfirmed, confirmReminder, unconfirmAllReminders, getOverdueUnconfirmed, confirmOverdueRecord, getOverdueConfirmedToday, OverdueUnconfirmedRecord, OverdueConfirmedRecord } from "../lib/alarm-store"
 import { isAlarmToday, formatRepeatDescription } from "../lib/scheduler"
 import { cancelRetryAlarms } from "../lib/alarm-bridge"
 import { Settings } from "./Settings"
@@ -177,7 +177,120 @@ function AlarmTimeRow({ point, onConfirm, onUnconfirm }: AlarmTimeRowProps) {
   )
 }
 
+// ==================== 过期未确认 ====================
+
+/** 格式化日期为 M月D日 */
+function fmtDateCN(date: Date): string {
+  return `${date.getMonth() + 1}月${date.getDate()}日`
+}
+
+/** 过期未确认行组件 */
+function OverdueRow({ record, onConfirm }: { record: OverdueUnconfirmedRecord; onConfirm: (r: OverdueUnconfirmedRecord) => void }) {
+  const { alarm, date, hour, minute, source, daysAgo } = record
+  const timeStr = fmtTime(hour, minute)
+  const isCreditCard = source === "credit_card"
+  const desc = formatRepeatDescription(alarm.repeat)
+
+  let titleLine = alarm.title
+  let titleSuffix = ""
+  if (isCreditCard && alarm.tag) {
+    const tagStr = `(${alarm.tag})`
+    const idx = alarm.title.indexOf(tagStr)
+    if (idx >= 0) {
+      const afterTag = idx + tagStr.length
+      titleLine = alarm.title.substring(0, afterTag)
+      titleSuffix = alarm.title.substring(afterTag).trim()
+    }
+  }
+
+  const descLines: string[] = [fmtDateCN(date)]
+  if (titleSuffix) descLines.push(titleSuffix)
+  descLines.push(desc)
+
+  const dayLabel = daysAgo === 1 ? "昨天" : daysAgo === 2 ? "前天" : `${daysAgo}天前`
+
+  return (
+    <VStack alignment="leading" spacing={3}
+      leadingSwipeActions={{
+        actions: [<Button key="confirm" title="确认" tint="systemGreen" action={() => onConfirm(record)} />]
+      }}
+    >
+      <HStack alignment="center" spacing={8}>
+        <Image
+          systemName="exclamationmark.triangle.fill"
+          foregroundStyle="systemRed"
+          imageScale="small"
+        />
+        <HStack alignment="firstTextBaseline" spacing={6}>
+          <Text font={20} fontWeight="bold" foregroundStyle="systemRed">{timeStr}</Text>
+          <Text font={15} foregroundStyle="label">{titleLine}</Text>
+          {isCreditCard && (
+            <Text font={14} foregroundStyle="systemOrange" fontWeight="semibold">信用卡</Text>
+          )}
+        </HStack>
+        <Text font={13} foregroundStyle="systemRed" fontWeight="semibold">{dayLabel}</Text>
+      </HStack>
+      {descLines.map((line, i) => (
+        <Text key={i} font={15} foregroundStyle="secondaryLabel">{line}</Text>
+      ))}
+    </VStack>
+  )
+}
+
 // ==================== 页面组件 ====================
+
+/** 过期已确认行组件（绿色，显示补确认的过期记录） */
+function OverdueConfirmedRow({ record }: { record: OverdueConfirmedRecord }) {
+  const { alarm, date, hour, minute, source, daysAgo, confirmedAt } = record
+  const timeStr = fmtTime(hour, minute)
+  const isCreditCard = source === "credit_card"
+  const desc = formatRepeatDescription(alarm.repeat)
+
+  let titleLine = alarm.title
+  let titleSuffix = ""
+  if (isCreditCard && alarm.tag) {
+    const tagStr = `(${alarm.tag})`
+    const idx = alarm.title.indexOf(tagStr)
+    if (idx >= 0) {
+      const afterTag = idx + tagStr.length
+      titleLine = alarm.title.substring(0, afterTag)
+      titleSuffix = alarm.title.substring(afterTag).trim()
+    }
+  }
+
+  const descLines: string[] = [fmtDateCN(date)]
+  if (titleSuffix) descLines.push(titleSuffix)
+  descLines.push(desc)
+
+  const dayLabel = daysAgo === 1 ? "昨天" : daysAgo === 2 ? "前天" : `${daysAgo}天前`
+  // 确认时间（今天）
+  const confirmedDate = new Date(confirmedAt)
+  const confirmedStr = `${String(confirmedDate.getHours()).padStart(2, "0")}:${String(confirmedDate.getMinutes()).padStart(2, "0")}`
+
+  return (
+    <VStack alignment="leading" spacing={3}>
+      <HStack alignment="center" spacing={8}>
+        <Image
+          systemName="checkmark.circle.fill"
+          foregroundStyle="systemGreen"
+          imageScale="small"
+        />
+        <HStack alignment="firstTextBaseline" spacing={6}>
+          <Text font={20} fontWeight="bold" foregroundStyle="systemGreen">{timeStr}</Text>
+          <Text font={15} foregroundStyle="label">{titleLine}</Text>
+          {isCreditCard && (
+            <Text font={14} foregroundStyle="systemOrange" fontWeight="semibold">信用卡</Text>
+          )}
+        </HStack>
+        <Text font={13} foregroundStyle="systemGreen" fontWeight="semibold">{dayLabel}</Text>
+      </HStack>
+      {descLines.map((line, i) => (
+        <Text key={i} font={15} foregroundStyle="secondaryLabel">{line}</Text>
+      ))}
+      <Text font={14} foregroundStyle="systemGreen">今日 {confirmedStr} 已确认</Text>
+    </VStack>
+  )
+}
 
 /** 模态弹出设置页 */
 const presentSettings = () =>
@@ -185,8 +298,17 @@ const presentSettings = () =>
 
 export function TodayAlarms({ selection }: { selection: Observable<number> }) {
   const allPoints = useObservable<AlarmTimePoint[]>(() => loadTodayAlarms())
+  const overdueRecords = useObservable<OverdueUnconfirmedRecord[]>(() => getOverdueUnconfirmed(7))
+  const overdueConfirmedRecords = useObservable<OverdueConfirmedRecord[]>(() => getOverdueConfirmedToday(7))
   const [toastMsg, setToastMsg] = useState("")
   const [toastShown, setToastShown] = useState(false)
+
+  // 重新加载所有数据（今日 + 过期）
+  const reloadAll = () => {
+    allPoints.setValue(loadTodayAlarms())
+    overdueRecords.setValue(getOverdueUnconfirmed(7))
+    overdueConfirmedRecords.setValue(getOverdueConfirmedToday(7))
+  }
 
   // 定时刷新：每 30 秒检查一次（闹铃状态随时间变化）
   const [, setTick] = useState(0)
@@ -194,7 +316,7 @@ export function TodayAlarms({ selection }: { selection: Observable<number> }) {
     let timerId: number
     const tick = () => {
       setTick(t => t + 1)
-      allPoints.setValue(loadTodayAlarms())
+      reloadAll()
       timerId = setTimeout(tick, 30000)
     }
     timerId = setTimeout(tick, 30000)
@@ -204,7 +326,7 @@ export function TodayAlarms({ selection }: { selection: Observable<number> }) {
   // 监听 Tab 切换：切回今日 Tab 时重新加载
   useEffect(() => {
     if (selection.value === 0) {
-      allPoints.setValue(loadTodayAlarms())
+      reloadAll()
     }
   }, [selection.value])
 
@@ -227,8 +349,19 @@ export function TodayAlarms({ selection }: { selection: Observable<number> }) {
     allPoints.setValue(loadTodayAlarms())
   }
 
+  // 确认过期未确认记录
+  const handleConfirmOverdue = (record: OverdueUnconfirmedRecord) => {
+    confirmOverdueRecord(record)
+    cancelRetryAlarms(record.alarm).catch(() => {})
+    setToastMsg(`已确认 ${fmtDateCN(record.date)} ${fmtTime(record.hour, record.minute)}: ${record.alarm.title}`)
+    setToastShown(true)
+    reloadAll()
+  }
+
   const { unconfirmed, confirmed, triggered, pending } = groupByStatus(allPoints.value)
-  const hasAny = unconfirmed.length > 0 || triggered.length > 0 || confirmed.length > 0 || pending.length > 0
+  const overdue = overdueRecords.value
+  const overdueConfirmed = overdueConfirmedRecords.value
+  const hasAny = unconfirmed.length > 0 || triggered.length > 0 || confirmed.length > 0 || pending.length > 0 || overdue.length > 0 || overdueConfirmed.length > 0
 
   // 今日日期显示
   const today = new Date()
@@ -243,7 +376,7 @@ export function TodayAlarms({ selection }: { selection: Observable<number> }) {
         toolbar={{
           topBarTrailing: (
             <HStack spacing={0}>
-              <Button title="" systemImage="arrow.clockwise" action={() => allPoints.setValue(loadTodayAlarms())} />
+              <Button title="" systemImage="arrow.clockwise" action={() => reloadAll()} />
               <Button title="" systemImage="gearshape" action={presentSettings} />
             </HStack>
           ),
@@ -269,6 +402,18 @@ export function TodayAlarms({ selection }: { selection: Observable<number> }) {
                     <Text font={14} foregroundStyle="systemOrange">待确认</Text>
                   </VStack>
                 )}
+                {overdue.length > 0 && (
+                  <VStack alignment="center" spacing={2}>
+                    <Text font={28} fontWeight="bold" foregroundStyle="systemRed">{overdue.length}</Text>
+                    <Text font={14} foregroundStyle="systemRed">过期</Text>
+                  </VStack>
+                )}
+                {overdueConfirmed.length > 0 && (
+                  <VStack alignment="center" spacing={2}>
+                    <Text font={28} fontWeight="bold" foregroundStyle="systemGreen">{overdueConfirmed.length}</Text>
+                    <Text font={14} foregroundStyle="systemGreen">补确认</Text>
+                  </VStack>
+                )}
                 {confirmed.length > 0 && (
                   <VStack alignment="center" spacing={2}>
                     <Text font={28} fontWeight="bold" foregroundStyle="systemGreen">{confirmed.length}</Text>
@@ -289,6 +434,24 @@ export function TodayAlarms({ selection }: { selection: Observable<number> }) {
             />
           )}
         </Section>
+
+        {/* 过期未确认 */}
+        {overdue.length > 0 && (
+          <Section header={<Text font={14} foregroundStyle="systemRed">过期未确认</Text>}>
+            {overdue.map((r, idx) => (
+              <OverdueRow key={`o-${r.alarm.id}-${idx}`} record={r} onConfirm={handleConfirmOverdue} />
+            ))}
+          </Section>
+        )}
+
+        {/* 补确认：今天确认的过期记录 */}
+        {overdueConfirmed.length > 0 && (
+          <Section header={<Text font={14} foregroundStyle="systemGreen">补确认</Text>}>
+            {overdueConfirmed.map((r, idx) => (
+              <OverdueConfirmedRow key={`oc-${r.alarm.id}-${idx}`} record={r} />
+            ))}
+          </Section>
+        )}
 
         {/* 未响铃 */}
         {pending.length > 0 && (
