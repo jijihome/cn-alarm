@@ -40,6 +40,8 @@ export interface ScheduleResult {
 export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Promise<ScheduleResult | null> {
   // 非 weekly 模式且未传 specificDate 时，用调度引擎算下次触发日期
   // 否则会掉进 scheduleSingleAlarm 的 else 分支变成 relative（每天重复响）
+  // weekly 模式 + gradualWake 时也需要算 specificDate，供渐进唤醒通知确定首次触发日期
+  // （scheduleSingleAlarm 对 weekly 走 weekly schedule 不依赖 specificDate，但渐进唤醒通知需要）
   if (!specificDate && alarm.repeat.mode !== "weekly") {
     // 调用方可能传入 enabled=false 的 alarm（toggle 场景：先 updateAlarm 再用旧对象调 scheduleAlarm）
     // 强制当 enabled=true 来算下次触发日期，因为调用方已决定要调度
@@ -53,6 +55,15 @@ export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Prom
     }
   }
 
+  // weekly 模式 + 渐进唤醒：算下次触发日期供渐进唤醒通知用（系统闹钟仍走 weekly schedule）
+  let gradualDate: Date | undefined
+  if (alarm.gradualWake && alarm.preAlertSeconds > 0 && alarm.repeat.mode === "weekly" && !specificDate) {
+    const alarmForCalc = { ...alarm, enabled: true }
+    gradualDate = getNextTrigger(alarmForCalc, new Date()) ?? undefined
+  } else if (specificDate) {
+    gradualDate = specificDate
+  }
+
   const mainType = alarm.mainType ?? "alarm"
   let mainAlarmId: string | null = null
   const allAlarmIds: string[] = []
@@ -63,7 +74,7 @@ export async function scheduleAlarm(alarm: AlarmItem, specificDate?: Date): Prom
   // ⚠️ AlarmManager.Countdown 的 preAlert 只是静默倒计时 UI，不产生声音
   // 所以用本地通知做真正的"轻提醒"，而不是用 preAlert 参数
   if (alarm.gradualWake && alarm.preAlertSeconds > 0) {
-    const gids = await scheduleGradualWakeNotifications(alarm, specificDate)
+    const gids = await scheduleGradualWakeNotifications(alarm, gradualDate)
     gradualWakeIds.push(...gids)
   }
 
@@ -170,12 +181,15 @@ async function scheduleSingleAlarm(
 // ==================== 调度渐进唤醒通知 ====================
 // 在正式闹钟前 preAlertSeconds 秒调度本地通知（轻提醒）
 // 为每个时间点（主+额外）各调度一条通知
+// weekly 闹钟用 weekly 重复通知（每个选中星期各一条），非 weekly 用 one-shot
 async function scheduleGradualWakeNotifications(
   alarm: AlarmItem,
   specificDate?: Date
 ): Promise<string[]> {
   const ids: string[] = []
   const preAlertSec = alarm.preAlertSeconds
+  const isWeekly = alarm.repeat.mode === "weekly"
+  const weekdays = alarm.repeat.weekdays ?? []
 
   // 收集所有时间点
   const allTimes = [
@@ -184,23 +198,64 @@ async function scheduleGradualWakeNotifications(
   ]
 
   for (const t of allTimes) {
-    const notifId = `${alarm.id}_gradual_${t.label}`
-    const triggerTime = buildTriggerDate(t.hour, t.minute, specificDate)
-    triggerTime.setSeconds(triggerTime.getSeconds() - preAlertSec)
+    if (isWeekly && weekdays.length > 0) {
+      // weekly 闹钟：为每个选中星期各调度一条 weekly 重复通知
+      // 需要为每个星期几算一个「未来的该星期几」日期作为 trigger_time
+      for (const wd of weekdays) {
+        // wd: Apple 编号 1=日 2=一 ... 7=六 → JS getDay: 0=日 1=一 ... 6=六
+        const jsDay = wd % 7
+        const triggerTime = findNextWeekday(jsDay, t.hour, t.minute, preAlertSec)
+        if (!triggerTime) continue
 
-    // 如果触发时间已过去，跳过
-    if (triggerTime.getTime() <= Date.now()) continue
+        const notifId = `${alarm.id}_gradual_${t.label}_wd${wd}`
+        const nid = await scheduleNotification(
+          notifId,
+          alarm.title + " ⏰",
+          `${Math.floor(preAlertSec / 60)} 分钟后响铃，请准备`,
+          triggerTime,
+          "weekly"
+        )
+        if (nid) ids.push(nid)
+      }
+    } else {
+      // 非 weekly：one-shot 通知
+      const notifId = `${alarm.id}_gradual_${t.label}`
+      const triggerTime = buildTriggerDate(t.hour, t.minute, specificDate)
+      triggerTime.setSeconds(triggerTime.getSeconds() - preAlertSec)
 
-    const nid = await scheduleNotification(
-      notifId,
-      alarm.title + " ⏰",
-      `${Math.floor(preAlertSec / 60)} 分钟后响铃，请准备`,
-      triggerTime
-    )
-    if (nid) ids.push(nid)
+      // 如果触发时间已过去，跳过
+      if (triggerTime.getTime() <= Date.now()) continue
+
+      const nid = await scheduleNotification(
+        notifId,
+        alarm.title + " ⏰",
+        `${Math.floor(preAlertSec / 60)} 分钟后响铃，请准备`,
+        triggerTime
+      )
+      if (nid) ids.push(nid)
+    }
   }
 
   return ids
+}
+
+/** 找到下一个指定星期几的触发时间（减去 preAlert 秒），用于 weekly 重复通知的首次 trigger_time */
+function findNextWeekday(targetDay: number, hour: number, minute: number, preAlertSec: number): Date | null {
+  const now = new Date()
+  for (let offset = 0; offset < 14; offset++) {
+    const candidate = new Date(now)
+    candidate.setDate(candidate.getDate() + offset)
+    candidate.setHours(hour, minute, 0, 0)
+    candidate.setSeconds(candidate.getSeconds() - preAlertSec)
+
+    // 必须是目标星期几
+    if (candidate.getDay() !== targetDay) continue
+    // 触发时间必须在未来
+    if (candidate.getTime() <= now.getTime()) continue
+
+    return candidate
+  }
+  return null
 }
 
 // ==================== 取消渐进唤醒通知 ====================

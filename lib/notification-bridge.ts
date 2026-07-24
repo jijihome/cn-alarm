@@ -21,7 +21,8 @@ export async function scheduleNotification(
   id: string,
   title: string,
   body: string,
-  triggerTime: Date
+  triggerTime: Date,
+  repeatsType?: "hourly" | "daily" | "weekly" | "monthly"
 ): Promise<string | null> {
   // trigger_time 格式：YYYY-MM-DD HH:MM:SS
   const y = triggerTime.getFullYear()
@@ -36,13 +37,14 @@ export async function scheduleNotification(
     title,
     body,
     trigger_time: triggerTimeStr,
+    ...(repeatsType ? { repeats_type: repeatsType } : {}),
   })
 
   if (result.success) {
     // schedule_notification 不返回 identifier，用自定义 ID 记录映射
     // 存到 Storage 便于后续取消
     const idMap = loadNotifIdMap()
-    idMap[id] = { title, trigger_time: triggerTimeStr }
+    idMap[id] = { title, trigger_time: triggerTimeStr, ...(repeatsType ? { repeats_type: repeatsType } : {}) }
     saveNotifIdMap(idMap)
     return id
   }

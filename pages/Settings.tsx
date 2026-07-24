@@ -5,6 +5,7 @@ import { loadHolidays, resetYearToDefault } from "../lib/holiday"
 import { AppSettings, HolidayCalendar } from "../lib/constants"
 import { HolidayEditor } from "./HolidayEditor"
 import { GroupManager } from "./GroupManager"
+import { HelpPage } from "./HelpPage"
 
 export function Settings() {
   const dismiss = Navigation.useDismiss()
@@ -48,7 +49,18 @@ export function Settings() {
       <List navigationTitle="设置" toolbar={{
         topBarTrailing: <Button title="关闭" systemImage="xmark" action={() => dismiss()} />,
       }}>
-        {/* 调休日历 */}
+        {/* 使用说明 */}
+      <Section>
+        <Button action={() => presentPage(<HelpPage />)}>
+          <HStack alignment="center">
+            <Text>使用说明</Text>
+            <Spacer />
+            <Text foregroundStyle="secondaryLabel">ⓘ</Text>
+          </HStack>
+        </Button>
+      </Section>
+
+      {/* 调休日历 */}
       <Section header={<Text>调休日历</Text>} footer={<Text font="footnote" foregroundStyle="systemGray">在闹钟的重复设置中选择调休动作（跳过/顺延），法定节假日当天自动处理</Text>}>
         <Button action={() => presentPage(<HolidayEditor />)}>
           <HStack alignment="center">
@@ -86,7 +98,7 @@ export function Settings() {
         header={<Text>后台保活</Text>}
         footer={
           <Text font="footnote" foregroundStyle="systemGray">
-            开启后，App 切换到后台时会尝试保持运行，倒计时卡片可继续刷新。回到前台自动停止保活。⚠️ 持续后台运行会增加电量消耗，系统在内存不足时仍可能终止 App。
+            {"仅影响「今日」页面的倒计时卡片刷新。闹钟和通知由 iOS 系统调度，与后台保活无关，关闭也不影响响铃。开启后 App 切后台时保持运行，倒计时实时刷新；回前台自动停止。持续后台运行会增加耗电。"}
           </Text>
         }
       >
