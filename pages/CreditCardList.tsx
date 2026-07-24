@@ -2,6 +2,8 @@
 import { useState, useObservable, NavigationStack, List, Section, Text, ForEach, Button, HStack, VStack, Toggle, ContentUnavailableView, Navigation, useEffect } from "scripting"
 import { CreditCard, CardSortKey } from "../lib/constants"
 import { loadCards, updateCard, getNextDueDate, formatDateCN, syncCardAlarmsById, cancelCardAlarmsById, getCardUnconfirmedCount, getCardUnconfirmedDetails, confirmCardReminders, unconfirmCardReminders, removeCardSync } from "../lib/credit-card"
+import { loadAlarms } from "../lib/alarm-store"
+import { isAlarmToday } from "../lib/scheduler"
 import { sortCards, CARD_SORT_OPTIONS } from "../lib/sort"
 import { loadSettings, saveSettings } from "../lib/alarm-store"
 import { AddCreditCard } from "./AddCreditCard"
@@ -47,10 +49,18 @@ function CardRow({ card, onEdit, onToggle, onConfirm, onUnconfirm }: { card: Cre
 
   // 确认状态
   const unconfirmedCount = getCardUnconfirmedCount(card)
-  const unconfirmedDetail = getCardUnconfirmedDetails(card)
+  const upcomingDetail = getCardUnconfirmedDetails(card, false)
+  const overdueDetail = getCardUnconfirmedDetails(card, true)
   const hasRetry = !!card.retryConfig?.enabled
   const hasUnconfirmed = hasRetry && unconfirmedCount > 0
-  const allConfirmed = hasRetry && unconfirmedCount === 0
+  const hasAlarmToday = hasRetry && (() => {
+    const allAlarms = loadAlarms()
+    const cardAlarms = allAlarms.filter((a) => card.alarmItemIds.includes(a.id))
+    const today = new Date()
+    return cardAlarms.some((a) => isAlarmToday(a, today))
+  })()
+  const allConfirmedToday = hasRetry && hasAlarmToday && !hasUnconfirmed
+  const noConfirmNeeded = hasRetry && !hasAlarmToday
 
   // 左滑操作按钮（仅 retryConfig 启用时显示）
   const leadingActions: { allowsFullSwipe?: boolean; actions: any[] } | undefined =
@@ -84,11 +94,17 @@ function CardRow({ card, onEdit, onToggle, onConfirm, onUnconfirm }: { card: Cre
           )}
         </HStack>
         <Text font={14} foregroundStyle="secondaryLabel">{reminderSummary(card)}</Text>
-        {hasUnconfirmed && (
-          <Text font={14} foregroundStyle="systemOrange">待确认: {unconfirmedDetail}</Text>
+        {upcomingDetail.length > 0 && (
+          <Text font={14} foregroundStyle="systemOrange">待确认: {upcomingDetail}</Text>
         )}
-        {allConfirmed && (
+        {overdueDetail.length > 0 && (
+          <Text font={14} foregroundStyle="systemRed">已过期未确认: {overdueDetail}</Text>
+        )}
+        {allConfirmedToday && (
           <Text font={14} foregroundStyle="systemGreen">今日已全部确认</Text>
+        )}
+        {noConfirmNeeded && (
+          <Text font={14} foregroundStyle="secondaryLabel">今日无需确认</Text>
         )}
       </VStack>
     </Toggle>

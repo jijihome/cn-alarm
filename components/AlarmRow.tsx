@@ -2,7 +2,7 @@
 import { useState } from "scripting"
 import { HStack, VStack, Text, Toggle, Image, Button } from "scripting"
 import { AlarmItem, RepeatMode } from "../lib/constants"
-import { formatRepeatDescription, getNextTriggerMulti } from "../lib/scheduler"
+import { formatRepeatDescription, getNextTriggerMulti, isAlarmToday } from "../lib/scheduler"
 import { isReminderConfirmed, getUnconfirmedTimes } from "../lib/alarm-store"
 
 interface AlarmRowProps {
@@ -38,11 +38,16 @@ export function AlarmRow({ alarm, groupTintColor, onToggle, onEdit, onConfirm, o
     ? `${String(nextTrigger.getHours()).padStart(2, "0")}:${String(nextTrigger.getMinutes()).padStart(2, "0")}`
     : timeStr
 
-  // 今天未确认的时间点
+  // 今天未确认的时间点（分为即将到来和已过期）
   const today = new Date()
   const unconfirmed = alarm.retryConfig?.enabled ? getUnconfirmedTimes(alarm, today) : []
+  const nowMinutes = today.getHours() * 60 + today.getMinutes()
+  const upcomingUnconfirmed = unconfirmed.filter(t => t.hour * 60 + t.minute > nowMinutes)
+  const overdueUnconfirmed = unconfirmed.filter(t => t.hour * 60 + t.minute <= nowMinutes)
   const hasUnconfirmed = unconfirmed.length > 0
-  const allConfirmed = alarm.retryConfig?.enabled && !hasUnconfirmed
+  const isToday = isAlarmToday(alarm, today)
+  const allConfirmedToday = alarm.retryConfig?.enabled && isToday && !hasUnconfirmed
+  const noConfirmNeeded = alarm.retryConfig?.enabled && !isToday
 
   const handleToggle = (value: boolean) => {
     setLoading(true)
@@ -98,13 +103,21 @@ export function AlarmRow({ alarm, groupTintColor, onToggle, onEdit, onConfirm, o
           {(alarm.reminderTimes && alarm.reminderTimes.length > 0) && (
             <Text font={14} foregroundStyle="secondaryLabel">{timePointsStr}</Text>
           )}
-          {hasUnconfirmed && (
+          {upcomingUnconfirmed.length > 0 && (
             <Text font={14} foregroundStyle="systemOrange">
-              待确认: {unconfirmed.map(t => `${String(t.hour).padStart(2, "0")}:${String(t.minute).padStart(2, "0")}`).join(", ")}
+              待确认: {upcomingUnconfirmed.map(t => `${String(t.hour).padStart(2, "0")}:${String(t.minute).padStart(2, "0")}`).join(", ")}
             </Text>
           )}
-          {allConfirmed && (
+          {overdueUnconfirmed.length > 0 && (
+            <Text font={14} foregroundStyle="systemRed">
+              已过期未确认: {overdueUnconfirmed.map(t => `${String(t.hour).padStart(2, "0")}:${String(t.minute).padStart(2, "0")}`).join(", ")}
+            </Text>
+          )}
+          {allConfirmedToday && (
             <Text font={14} foregroundStyle="systemGreen">今日已全部确认</Text>
+          )}
+          {noConfirmNeeded && (
+            <Text font={14} foregroundStyle="secondaryLabel">今日无需确认</Text>
           )}
         </VStack>
     </Toggle>

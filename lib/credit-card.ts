@@ -405,15 +405,19 @@ function fmtHM(hour: number, minute: number): string {
 }
 
 /** 获取一张信用卡的未确认提醒详情（今天），返回格式化字符串 */
-export function getCardUnconfirmedDetails(card: CreditCard): string {
+export function getCardUnconfirmedDetails(card: CreditCard, overdueOnly?: boolean): string {
   if (!card.retryConfig?.enabled) return ""
   const allAlarms = loadAlarms()
   const cardAlarms = allAlarms.filter((a) => card.alarmItemIds.includes(a.id) && a.retryConfig?.enabled)
   const today = new Date()
+  const nowMinutes = today.getHours() * 60 + today.getMinutes()
   const items: string[] = []
   for (const alarm of cardAlarms) {
     const suffix = extractTitleSuffix(alarm.title)
     for (const t of getUnconfirmedTimes(alarm, today)) {
+      const tMinutes = t.hour * 60 + t.minute
+      if (overdueOnly === true && tMinutes > nowMinutes) continue
+      if (overdueOnly === false && tMinutes <= nowMinutes) continue
       items.push(`${suffix}${fmtHM(t.hour, t.minute)}`)
     }
   }
