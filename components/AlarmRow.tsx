@@ -34,6 +34,9 @@ export function AlarmRow({ alarm, groupTintColor, onToggle, onEdit, onConfirm, o
   const nextDateStr = nextTrigger
     ? (nextTrigger.getMonth() + 1) + "月" + nextTrigger.getDate() + "日 周" + "日一二三四五六"[nextTrigger.getDay()]
     : null
+  const nextTimeStr = nextTrigger
+    ? `${String(nextTrigger.getHours()).padStart(2, "0")}:${String(nextTrigger.getMinutes()).padStart(2, "0")}`
+    : timeStr
 
   // 今天未确认的时间点
   const today = new Date()
@@ -79,17 +82,16 @@ export function AlarmRow({ alarm, groupTintColor, onToggle, onEdit, onConfirm, o
             foregroundStyle={alarm.tintColor as any}
             imageScale="small"
           />
-          <HStack alignment="firstTextBaseline" spacing={8}>
-            <Text font={22} fontWeight="bold">{timeStr}</Text>
-            <Text font={16} foregroundStyle="secondaryLabel">{alarm.title}</Text>
-          </HStack>
+          <Text font={20} fontWeight="bold">{alarm.title}</Text>
+          {alarm.groupName ? <Text font={14} foregroundStyle={(groupTintColor || "systemBlue") as any}>{alarm.groupName}</Text> : null}
         </HStack>
-                {(alarm.groupName || alarm.tag || alarm.note) ? <HStack spacing={4}>
-          {alarm.groupName ? <Text font={15} foregroundStyle={(groupTintColor || "systemBlue") as any}>{alarm.groupName}</Text> : null}
-          {(alarm.groupName && (alarm.tag || alarm.note)) ? <Text font={15} foregroundStyle="secondaryLabel">·</Text> : null}
-          {(alarm.tag || alarm.note) ? <Text font={15} foregroundStyle={(alarm.tintColor || "systemBlue") as any}>{[alarm.tag, alarm.note].filter(Boolean).join(" · ")}</Text> : null}
-        </HStack> : null}
-          <Text font={14} foregroundStyle="secondaryLabel">{desc}{nextDateStr ? ` · ${nextDateStr}` : ""}</Text>
+        <HStack alignment="firstTextBaseline" spacing={4}>
+          {nextDateStr ? <Text font={14} foregroundStyle="secondaryLabel">{nextDateStr}</Text> : null}
+          <Text font={14} fontWeight="semibold">{nextTimeStr}</Text>
+        </HStack>
+        {alarm.tag ? <Text font={15} foregroundStyle={(alarm.tintColor || "systemBlue") as any}>{alarm.tag}</Text> : null}
+          <Text font={14} foregroundStyle="secondaryLabel">{desc}</Text>
+          {alarm.note ? <Text font={14} foregroundStyle="secondaryLabel">{alarm.note}</Text> : null}
           {(alarm.reminderTimes && alarm.reminderTimes.length > 0) && (
             <Text font={14} foregroundStyle="secondaryLabel">{timePointsStr}</Text>
           )}

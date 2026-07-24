@@ -100,11 +100,12 @@ function NextAlarmCard({ alarms }: { alarms: AlarmItem[] }) {
 
   return (
     <VStack alignment="leading" spacing={4}>
-      <Text font={15} foregroundStyle="secondaryLabel">下一个闹钟</Text>
-      <Text font={28} fontWeight="bold" foregroundStyle="label">{countdown}</Text>
+      <Text font={20} fontWeight="bold">{next.alarm.title}</Text>
       <Text font={14} foregroundStyle="secondaryLabel">
-        {next.alarm.title} · {timeStr} · {next.date.getMonth() + 1}月{next.date.getDate()}日 周{"日一二三四五六"[next.date.getDay()]} · {formatRepeatDescription(next.alarm.repeat)}
+        {timeStr} · {next.date.getMonth() + 1}月{next.date.getDate()}日 周{"日一二三四五六"[next.date.getDay()]}
       </Text>
+      <Text font={28} fontWeight="bold" foregroundStyle="label">{countdown}</Text>
+      <Text font={14} foregroundStyle="secondaryLabel">{formatRepeatDescription(next.alarm.repeat)}</Text>
     </VStack>
   )
 }
