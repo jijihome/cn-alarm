@@ -113,11 +113,10 @@ export function resetYearToDefault(year: number): HolidayCalendar | null {
   if (!defaultCal) return null
   const cals = loadHolidays()
   const idx = cals.findIndex((c) => c.year === year)
+  // B 方案：清空 Storage 中该年数据，让 loadHolidays 走 fallback 到 DEFAULT_HOLIDAYS
   if (idx >= 0) {
-    cals[idx] = defaultCal
-  } else {
-    cals.push(defaultCal)
+    cals.splice(idx, 1)
   }
   saveHolidays(cals)
-  return defaultCal
+  return { ...defaultCal, source: "default" as const }
 }

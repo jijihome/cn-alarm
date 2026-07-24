@@ -25,6 +25,14 @@ export function HolidayEditor() {
     holidays.setValue(loadHolidays())
   }
 
+  const isNetwork = yearCal.source === "network"
+  const syncTime = yearCal.syncedAt
+    ? new Date(yearCal.syncedAt).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : null
+  const sourceLabel = isNetwork && syncTime
+    ? `数据来源：联网同步 · ${syncTime}`
+    : "数据来源：内置默认"
+
   return (
     <NavigationStack>
       <List
@@ -49,6 +57,9 @@ export function HolidayEditor() {
               <Text font={16}>{w.name}</Text>
             </HStack>
           ))}
+        </Section>
+
+        <Section footer={<Text font="footnote" foregroundStyle="systemGray">{sourceLabel}</Text>}>
         </Section>
       </List>
     </NavigationStack>

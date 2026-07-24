@@ -189,6 +189,10 @@ export interface HolidayCalendar {
   year: number
   holidays: HolidayEntry[]
   workdays: HolidayEntry[]
+  /** 数据来源："default"=内置默认 / "network"=联网获取 */
+  source?: "default" | "network"
+  /** 联网同步时间（ISO 字符串） */
+  syncedAt?: string
 }
 
 export interface AppSettings {

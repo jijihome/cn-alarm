@@ -7,11 +7,16 @@ import { HolidayEditor } from "./HolidayEditor"
 import { GroupManager } from "./GroupManager"
 import { HelpPage } from "./HelpPage"
 
+const FETCH_SCRIPT = "/var/mobile/Library/Mobile Documents/iCloud~com~thomfang~Scripting/Documents/scripts/中国闹钟/lib/fetch-holidays.ts"
+
 export function Settings() {
   const dismiss = Navigation.useDismiss()
   const settings = useObservable<AppSettings>(() => loadSettings())
   const holidays = useObservable<HolidayCalendar[]>(() => loadHolidays())
   const groupCount = useObservable<number>(() => loadGroups().length)
+  const isSyncing = useObservable<boolean>(() => false)
+  const toastMsg = useObservable<string>(() => "")
+  const toastShown = useObservable<boolean>(() => false)
 
   // 每次页面出现时刷新（push 回来后 useEffect 重新执行）
   useEffect(() => {
@@ -30,10 +35,44 @@ export function Settings() {
   const currentYearCal = holidays.value.find((c) => c.year === currentYear)
   const holidayCount = currentYearCal?.holidays.length ?? 0
   const workdayCount = currentYearCal?.workdays.length ?? 0
+  const isNetworkSource = currentYearCal?.source === "network"
 
   const handleResetHolidays = () => {
     resetYearToDefault(currentYear)
     holidays.setValue(loadHolidays())
+  }
+
+  // 联网同步节假日
+  const handleSyncHolidays = () => {
+    if (isSyncing.value) return
+    isSyncing.setValue(true)
+    const scriptPath = FETCH_SCRIPT.replace(/ /g, "\\ ")
+    const years = JSON.stringify([currentYear, currentYear + 1]).replace(/'/g, "\\u0027")
+    const cmd = `scripting-ts run ${scriptPath} --queryparameters '{"years":${years}}'`
+    Shell.run(cmd).then((result) => {
+      isSyncing.setValue(false)
+      try {
+        const match = result.output.match(/Script result:\s*({[\s\S]*})/)
+        if (match) {
+          const data = JSON.parse(match[1])
+          if (data.ok) {
+            toastMsg.setValue(data.summary || "已同步节假日数据")
+          } else {
+            toastMsg.setValue("同步失败：" + (data.error || "未知错误"))
+          }
+        } else {
+          toastMsg.setValue("同步失败：" + (result.output.substring(0, 100) || "无输出"))
+        }
+      } catch {
+        toastMsg.setValue("同步失败：无法解析结果")
+      }
+      toastShown.setValue(true)
+      holidays.setValue(loadHolidays())
+    }).catch(() => {
+      isSyncing.setValue(false)
+      toastMsg.setValue("同步失败：网络错误")
+      toastShown.setValue(true)
+    })
   }
 
   // 导航到子页面，返回后刷新数据
@@ -48,7 +87,7 @@ export function Settings() {
     <NavigationStack>
       <List navigationTitle="设置" toolbar={{
         topBarTrailing: <Button title="关闭" systemImage="xmark" action={() => dismiss()} />,
-      }}>
+      }} toast={{ message: toastMsg.value, isPresented: toastShown }}>
         {/* 使用说明 */}
       <Section>
         <Button action={() => presentPage(<HelpPage />)}>
@@ -66,9 +105,13 @@ export function Settings() {
           <HStack alignment="center">
             <Text>节假日安排</Text>
             <Spacer />
-            <Text foregroundStyle="secondaryLabel">{holidayCount}假 {workdayCount}补</Text>
+            <Text foregroundStyle="secondaryLabel">{holidayCount}假 {workdayCount}补{isNetworkSource ? " · 已同步" : ""}</Text>
           </HStack>
         </Button>
+        <Button
+          title={isSyncing.value ? "同步中..." : "联网同步"}
+          action={handleSyncHolidays}
+        />
         <Button title="重置为默认值" action={handleResetHolidays} />
       </Section>
 
